@@ -1,4 +1,4 @@
 interface:
   display_name: "Recording to Bilingual Courseware"
   short_description: "Turn recordings into offline bilingual HTML lessons"
-  default_prompt: "Convert my lecture recording into a single-file offline interactive HTML lesson with the lecturer's original voice, synchronized Chinese-English subtitles, chapters and 0.1x speed controls."
+  default_prompt: "Convert my lecture recording into a single-file offline interactive HTML lesson with the lecturer's original voice, synchronized Chinese-English subtitles, chapters and 0.1x speed controls. Include source-timestamped QA flags for uncertain numbers, dates and terminology; do not guess corrections."

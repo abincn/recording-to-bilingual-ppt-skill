@@ -5,7 +5,7 @@ description: Convert lectures, meetings, classes, training, workshops or intervi
 
 # Recording → interactive bilingual courseware
 
-**Current release: v2.1.0.** `VERSION` is authoritative; `--version`, the
+**Current release: v2.1.1.** `VERSION` is authoritative; `--version`, the
 generated `manifest.json` and the HTML footer read it automatically.
 
 Create a **different lesson from each recording**. The default deliverable is
@@ -48,6 +48,19 @@ Read `README.md` for setup and supported agent locations; read
 - Cover each transcript cue exactly once across ordered chapters. Preserve
   content, speaker chronology, complete examples and audio synchronization.
   Never delete speech to shorten the course or discard words to hide subtitles.
+- **Treat ASR as a draft, especially for numbers, years and named terms.**
+  Generate `transcript-qa.json` and `transcript-qa.md` with original cue IDs,
+  original recording timestamps, suspicious numeric expressions and technical
+  acronyms. Do not silently replace `211` with `2011` or `2021`, nor alter a
+  spoken amount to make a total balance. Arithmetic agreement proves internal
+  consistency, not that the speaker said the number. Verify against replayed
+  audio and a reliable textbook/source before any correction. Distinguish
+  spoken value, documented reference, and inferred/derived values.
+- The optional `--qa-recheck` performs targeted local Whisper re-recognition
+  of up to 12 suspicious cues; `--qa-compare` accepts an independently prepared
+  second-pass JSON instead. Compare and **flag differences only**; neither
+  source may silently override the original. If the source is truly unclear,
+  preserve uncertainty and include it in slide notes or table footnotes.
 - Use source-supported facts. Identify uncertain ASR figures and inferred
   values. Check arithmetic only for lessons containing calculations. Do not
   invent tables, diagrams or formulas for material that does not need them.
@@ -101,13 +114,28 @@ PROJECT="/absolute/path/to/lecture-output"
      --project "$PROJECT" --stage transcribe
    ```
 
+   Inspect `$PROJECT/transcript-qa.md` before translating. The report flags
+   numeric/year-like and acronym cues for review without changing their text.
+   For extra evidence, optionally repeat the transcribe stage with
+   `--resume --qa-recheck` (targeted local ASR, additional processing time),
+   or use `--resume --qa-compare /absolute/path/second-pass.json`.
+   The comparison JSON may map 1-based cue IDs to alternate English text or
+   contain timestamped English cues on the **original** audio timeline.
+   Second-pass disagreement is a review signal, never automatic proof.
+   The comparison is saved in `qa-second-pass.json` and reused on `--resume`
+   only while the original cue fingerprint matches; modified source cues
+   invalidate it and require a new comparison.
+
 3. Use the active AI agent (Claude, Codex, Gemini, Cursor, OpenCode, etc.)
    to translate each cue into Simplified Chinese in
    `$PROJECT/sentence_cn.json` using keys `"1"`, `"2"`, ... and curate
    `$PROJECT/courseware-plan.json` based on **this recording**. Translation
    is a reasoning step performed by the host AI, not by an unspecified
    translation API inside the Python scripts. Chinese editing/confirmation
-   is optional, not a blocking step.
+   is optional, not a blocking step. Use the same vetted source cue IDs
+   when preparing bilingual subtitles and slide figures. A textbook-supported
+   or derived number not spoken in the audio needs explicit attribution in
+   plan notes or a visible footnote; do not silently rewrite source speech.
 4. Generate the **default single-file HTML**:
 
    ```bash
@@ -132,7 +160,9 @@ PROJECT="/absolute/path/to/lecture-output"
    in Chrome/Edge); test audio play, seek, next chapter, subtitle visibility,
    speed at 1.1× and 0.5× and offline loading. Check captions against audio
    and ensure all chapter images load, no missing external assets and no
-   browser console errors. After changing scripts, run
+   browser console errors. Inspect `transcript-qa.md` for mismatched numbers
+   or unsupported slide figures. Review is advisory by default and does not
+   silently edit captions or block the HTML build. After changing scripts, run
    `cd "$SKILL_ROOT" && python3 -B -m unittest discover -s tests -v`.
 
 ### Optional legacy PowerPoint
@@ -155,7 +185,7 @@ apply PPTX-only strip requirements to the HTML layout.
 
 ## Output and version contract
 
-- `VERSION`: one-line SemVer, currently `2.1.0`. Update it on every release;
+- `VERSION`: one-line SemVer, currently `2.1.1`. Update it on every release;
   increase the major component for incompatible deliverable/API changes.
 - `python3 "$SKILL_ROOT/scripts/run_pipeline.py" --version` and
   `python3 "$SKILL_ROOT/scripts/build_web.py" --version` print the exact
@@ -164,6 +194,12 @@ apply PPTX-only strip requirements to the HTML layout.
   the HTML footer displays the same version for update identification.
 - `merged_cues.json` and `enhanced_master.wav`: source-aligned transcript and
   cleaned original voice.
+- `transcript-qa.json` and `transcript-qa.md`: original-time audit of
+  numbers, year-like values, spoken-number phrases, acronyms, optional
+  second-pass disagreements and unsupported slide figures. These never
+  automatically change the transcript.
+- `qa-second-pass.json` (optional): cached second-pass evidence tied to an
+  exact source transcript fingerprint, invalidated when original cues change.
 - `optimized_master.wav`, `optimized_cues.json`, `silence-report.json`:
   compressed media, remapped time and savings; never lose original artifacts.
 - `sentence_cn.json`: Chinese text with matching 1-based IDs.

@@ -1,6 +1,6 @@
 # Recording → Interactive Bilingual Courseware
 
-**Version 2.1.0** · [Check `VERSION`](VERSION)
+**Version 2.1.1** · [Check `VERSION`](VERSION)
 
 Turn lectures, classes, workshops, meetings or training recordings from **any
 subject** into a downloadable **single-file HTML** learning experience. The
@@ -24,6 +24,9 @@ and installations keep working.
   adjacent subtitles to avoid one-frame flashes.
 - Single self-contained output, including MP3 audio and embedded slide images.
 - A visible skill version in the page footer and `manifest.json`.
+- A source-timestamped transcription QA report flags suspicious numbers,
+  years, abbreviations and potential slide-vs-subtitle inconsistencies.
+  Results are review prompts, never automatic corrections.
 
 ## Requirements
 
@@ -90,7 +93,29 @@ python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
   --stage transcribe
 ```
 
-This produces `enhanced_master.wav` and `merged_cues.json`.
+This produces `enhanced_master.wav`, `merged_cues.json`, and two audit files:
+`transcript-qa.json` and `transcript-qa.md`. The QA report keeps original
+cue IDs and timestamps; numbers and years are **not** guessed or silently
+corrected. Three-digit values such as `211` remain as recognized until the
+source recording or an authoritative reference supports a correction.
+
+Optionally request an additional local Whisper pass on up to 12 sensitive cues
+(adds recognition time) or compare an independent second-pass transcript:
+
+```bash
+python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
+  --stage transcribe --resume --qa-recheck
+# OR supply a second-pass JSON with original-time English cues / ID-to-text values:
+python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
+  --stage transcribe --resume --qa-compare ./second-pass.json
+```
+
+Disagreements are listed for review; neither pass overwrites the other.
+Optional comparison evidence is saved as `qa-second-pass.json` and reused
+on `--resume` only if the source transcript is unchanged. A
+correct arithmetic sum does not by itself prove individual figures were heard
+correctly. When textbooks or calculations supply a figure, record the evidence
+in the plan notes or table footnote instead of rewriting the speaker's words.
 
 **2. Curate content and translations**
 
@@ -174,7 +199,7 @@ python3 scripts/build_web.py --version
 python3 -B -m unittest discover -s tests -v
 ```
 
-`VERSION` contains the authoritative SemVer (currently `2.1.0`). Every new
+`VERSION` contains the authoritative SemVer (currently `2.1.1`). Every new
 release updates that file (and this visible release text); the CLIs, HTML
 footer and `manifest.json` automatically use the same value.
 

@@ -8,6 +8,7 @@ does not upload recordings or transcripts to remote services.
 from __future__ import annotations
 import argparse
 import json
+from hashlib import sha256
 import os
 import re
 import shutil
@@ -25,6 +26,7 @@ from make_ass import render as render_ass
 from make_videos import duration as media_duration, render_one
 from courseware_plan import body_lines, render_image, specs_from_plan, validate_plan
 from timing_optimize import optimize_audio
+from transcript_qa import audit, recheck_selected, write_report
 from build_web import SKILL_VERSION, build as build_web
 
 def external(command):
@@ -240,6 +242,11 @@ def main():
     ap.add_argument("--no-caption-merge", action="store_true")
     ap.add_argument("--short-caption", type=float, default=1.0)
     ap.add_argument("--min-caption", type=float, default=1.5)
+    ap.add_argument("--qa-compare", help="Optional alternate ASR JSON (ID-to-text or original-time cues)")
+    ap.add_argument("--qa-recheck", action="store_true",
+                    help="Optionally re-recognize suspicious source-aligned cues with local Whisper")
+    ap.add_argument("--qa-max-recheck", type=int, default=12,
+                    help="Maximum suspicious cues to re-recognize when --qa-recheck is selected")
     ap.add_argument("--resume", action="store_true", help="Reuse an existing enhanced master and transcript")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
@@ -266,8 +273,41 @@ def main():
     transcript_path = project/"merged_cues.json"
     cues = check_cues(read_json(transcript_path)) if args.resume and transcript_path.exists() else transcribe(master, args.model, args.language)
     write_json(transcript_path, cues)
+    if args.qa_compare and args.qa_recheck:
+        ap.error("Choose either --qa-compare or --qa-recheck for the second-pass input")
+    source_fingerprint = sha256(
+        json.dumps(cues, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    second_pass_path = project/"qa-second-pass.json"
+    if args.qa_recheck:
+        comparison = recheck_selected(master, cues, model_name=args.model,
+                                      language=args.language, limit=args.qa_max_recheck)
+        qa_source = "local_whisper_recheck"
+    elif args.qa_compare:
+        comparison = read_json(args.qa_compare)
+        qa_source = "supplied_second_pass"
+    elif args.resume and second_pass_path.exists():
+        stored = read_json(second_pass_path)
+        if stored.get("source_fingerprint") == source_fingerprint:
+            comparison = stored["candidates"]
+            qa_source = stored.get("source", "saved_second_pass")
+        else:
+            comparison, qa_source = None, "stale_second_pass_ignored"
+            print("WARNING: source cues changed; ignoring saved second-pass comparison",
+                  file=sys.stderr)
+    else:
+        comparison, qa_source = None, "source_transcript"
+    qa_report = audit(cues, second_pass=comparison, source=qa_source)
+    if args.qa_recheck or args.qa_compare:
+        write_json(second_pass_path, {
+            "source_fingerprint": source_fingerprint, "source": qa_source,
+            "candidates": comparison,
+        })
+    write_report(project, qa_report)
     if args.stage == "transcribe":
-        print(f"Transcript ready: {transcript_path}. Supply --translations JSON and --resume for the full build.")
+        print(f"Transcript ready: {transcript_path}. "
+              f"QA: {project/'transcript-qa.md'} ({qa_report['issue_count']} review items). "
+              "Supply --translations JSON and --resume for the full build.")
         return
     if args.translator == "provided" and not args.translations:
         ap.error("Provide --translations with host-AI/user translations, or explicitly choose --translator ollama")
@@ -277,6 +317,9 @@ def main():
                         model=args.ollama_model, url=args.ollama_url)
     write_json(project/"sentence_cn.json", {str(k):v for k,v in chinese.items()})
     curated = validate_plan(read_json(args.courseware_plan), cues, whole) if args.courseware_plan else None
+    if curated:
+        qa_report = audit(cues, second_pass=comparison, slides=curated, source=qa_source)
+        write_report(project, qa_report)
     audio_master = project/"optimized_master.wav"
     if args.no_silence_compression:
         shutil.copyfile(master, audio_master)
@@ -303,6 +346,8 @@ def main():
                 "slide_width_in":13.333, "slide_height_in":7.5,
                 "subtitle_fraction":1.805/7.5, "mode":args.mode,
                 "autoplay":args.autoplay, "draft":not bool(curated),
+                "transcript_qa":"transcript-qa.json",
+                "transcript_review_items":qa_report["issue_count"],
                 "caption_merge":not args.no_caption_merge,
                 "short_caption":args.short_caption, "min_caption":args.min_caption,
                 "slides":[]}
@@ -365,7 +410,8 @@ def main():
         webpage = build_web(project, overwrite=args.force or args.resume)
         print(f"Done: {webpage}\nStandalone and offline; open in Chrome or Edge.\n"
               f"Skill v{SKILL_VERSION}. Silence saved: {audio_report['saved_seconds']:.2f}s; "
-              f"captions merged: {sum(s['merged_cues'] for s in styles)}")
+              f"captions merged: {sum(s['merged_cues'] for s in styles)}; "
+              f"transcription QA items: {qa_report['issue_count']}")
         return
     for item in manifest["slides"]:
         render_one(project/item["audio"], project/item["ass"], item["bar_color"],

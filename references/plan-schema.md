@@ -76,3 +76,8 @@ chapter image; only the opt-in `--format pptx --mode editable` output uses
    short text. The renderer should fail on overflow instead of cropping.
 5. Structural validation ensures layout and cue alignment; it does *not*
    automatically verify the truth of free-form slide statements.
+6. Check `transcript-qa.md` for uncertain numbers, years and acronyms. A
+   calculated total or a textbook example does not establish what the lecturer
+   actually said. Document derived/external numerical values in `notes` or
+   table `footnote`, and keep transcript/subtitle cue IDs unchanged unless
+   source evidence genuinely supports a correction.
