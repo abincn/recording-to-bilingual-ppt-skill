@@ -14,11 +14,61 @@ for prerequisites and user-facing setup; it documents the local Whisper/Ollama o
   volume, but cannot recover words missing from the microphone.
 - Transcribe locally with **word timestamps**. Confirm any ambiguous figures, formulae,
   names and terminology with the user; never silently "correct" the source.
-- Make sentence-based English cues, preserve complete sentences, then **automatically**
-  translate each cue into Chinese with the same 1-based identifier. Match counts,
+- Make sentence-based English cues, preserve complete sentences, then translate
+  each cue into Chinese with the same 1-based identifier. Match counts,
   identifiers, Chinese-script presence and Arabic-digit quantities automatically.
   Retry invalid model outputs; do not require manual Chinese proofreading by default.
   If punctuation is absent, pause-based/semantic sentence boundaries require review.
+- **Translation source is chosen by the user, never assumed.** Local Ollama is
+  only one option; assistant-supplied or user-supplied `sentence_cn.json` is
+  equally valid, and is the default when the user has declined local-model
+  translation. Do not start a local-model install or download on that basis.
+- **Default slide mode is curated hand-table courseware, not extractive draft.**
+  The extractive outline (first cue as title, next cues as bullets) is only a
+  fallback draft, must be labelled as such in delivery, and must never be
+  delivered as finished courseware when the user expects hand-designed slides.
+  See "Curated hand-table mode" below. This rule overrides any pipeline default
+  that produces extractive titles such as "Okay." as a slide title.
+- **Subtitle cue merging (curated mode).** Merge short cues (< 2.5 s or
+  < 12 characters) into the next cue, drop filler-only cues that carry no
+  content (for example a lone "Okay."), and never split a sentence across
+  cues or slides. Long cues that contain board-writing pauses are kept whole.
+
+## Curated hand-table mode (default)
+
+Design the slide deck from the lecture's structure, not from transcript order
+alone. For an exercise-driven lecture, the deck is typically: cover, the
+section map, core rules, one slide per exercise with a bilingual table,
+worked examples, common mistakes, and a review checklist.
+
+- **Slide images are hand-designed** (2560×1440 in the reference deck, same
+  background as the subtitle bar). Each table is bilingual: English item name
+  plus Chinese, with Change / Adjustment / Amount columns as the exercise
+  requires, a distinct total row, and a footnote for anything derived or
+  uncertain. In image mode the slide text is **not editable in PowerPoint**;
+  in editable mode the same tables must be native PowerPoint tables, not
+  bullet lists with the same numbers.
+- **Arithmetic must close exactly.** Every table total is recomputed from its
+  rows before delivery (for example 106,800 + 41,700 − 11,000 + 4,800 + 2,750
+  + 4,900 − 1,700 = 148,250). A row whose number is back-derived from the
+  total, or whose number was not clearly spoken, is footnoted with its
+  derivation and marked for textbook verification; it is never presented as
+  if it were spoken. A row whose number is genuinely unknown is shown as
+  "—", not filled in.
+- **Slide timing is topic-aligned, not equal-partitioned.** Each curated
+  slide covers the recording range for its topic, aligned to sentence
+  boundaries. Review slides may splice non-contiguous ranges at sentence
+  boundaries only; mark them `review:true` in `slides.json`.
+- **Corrections are listed, never silent.** When a later, clearer
+  transcription changes a table figure (for example inventory decrease
+  6,800 → 4,800, prepaid decrease 750 → 2,750, or a previously blank
+  depreciation row filled with 81,750), delivery must list the old figure,
+  the new figure, and where the new figure came from.
+- Worked example: `examples/ch13-curated.md` records the verified Chapter 13
+  tables (13-3 = 66,730; 13-4 = 502,960; 13-5 = 148,250; land gain 13,300,
+  net investing −39,700; bonds issued cash 420,000, redeemed cash 138,000,
+  net financing +282,000) with the derivation note for 13-4 accounts
+  receivable increase 6,000.
 - Do not send audio/transcript to cloud translation providers automatically. The provided
   pipeline uses **local Ollama** at a loopback address, or user-supplied translation JSON.
   Whisper model weights may be downloaded on first use; inform the user.
@@ -47,6 +97,15 @@ for prerequisites and user-facing setup; it documents the local Whisper/Ollama o
    For native editable slide text, pass `--mode editable`. Multiple backgrounds:
    `--colors F6FBF3,243044,EEE8D5`.
 
+   **Curated mode (default for finished courseware):** do not ship the
+   pipeline's extractive deck as-is. First design the curated deck and its
+   topic-aligned `slides.json` (see "Curated hand-table mode"), render or
+   supply the hand-table slide images, reuse the pipeline's cleaned audio,
+   merged bilingual cues and middle-centred subtitle videos for those
+   ranges, then build the PPTX from the curated images + videos with
+   `scripts/build_ppt.py` (image mode) or native tables (editable mode).
+   Recompute every table total and record any correction before delivery.
+
 3. Only if the user explicitly wants to supply translations, or Ollama is
    unavailable, offer the optional two-pass path:
 
@@ -63,8 +122,11 @@ for prerequisites and user-facing setup; it documents the local Whisper/Ollama o
 5. Inspect `lecture-output/qa/` for visual clipping and PPT playback controls.
    The program performs automatic Chinese coverage and number checks; human
    *Chinese translation proofreading* is optional, never a default gate.
-6. Present the PPTX, the modes/limitations, the selected backgrounds and text colors,
-   and any unresolved ASR/numerical discrepancies to the user.
+6. Present the PPTX, the mode (curated hand-table image, curated hand-table
+   editable, or extractive draft — labelled as a draft), the selected
+   backgrounds and text colors, every table arithmetic check, every
+   correction versus a previous draft, and any unresolved ASR/numerical
+   discrepancies to the user.
 
 ## Input and outputs
 
