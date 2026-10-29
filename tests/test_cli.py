@@ -14,6 +14,8 @@ from validate import validate
 from pipeline_core import write_json, read_json
 from pptx import Presentation
 
+EXPECTED_VERSION = (Path(__file__).resolve().parents[1]/"VERSION").read_text(encoding="utf-8").strip()
+
 class PipelineTests(unittest.TestCase):
     def test_end_to_end_image_then_editable_resume(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -105,15 +107,18 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(len(data["slides"]), 2)
             self.assertEqual(len(data["captions"]), 2)
             self.assertEqual(data["captions"][0]["cn"], "植物吸收阳光。")
-            self.assertEqual(data["version"], "2.0.0")
+            self.assertEqual(data["version"], EXPECTED_VERSION)
             self.assertEqual(read_json(project/"manifest.json")["format"], "html")
             self.assertFalse((project/"subtitle_videos"/"slide01.mp4").exists())
 
     def test_cli_version_without_audio(self):
-        for name in ("run_pipeline.py", "build_web.py"):
-            result = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1]/"scripts"/name),
-                                     "--version"], capture_output=True, text=True, check=True)
-            self.assertEqual(result.stdout.strip(), "2.0.0")
+        # Absolute script invocation works from unrelated agent/project directories.
+        with tempfile.TemporaryDirectory() as temp:
+            for name in ("run_pipeline.py", "build_web.py"):
+                result = subprocess.run(
+                    [sys.executable, str(Path(__file__).resolve().parents[1]/"scripts"/name),
+                     "--version"], cwd=temp, capture_output=True, text=True, check=True)
+                self.assertEqual(result.stdout.strip(), EXPECTED_VERSION)
 
 if __name__ == "__main__":
     unittest.main()

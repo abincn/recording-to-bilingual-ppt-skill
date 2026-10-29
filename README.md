@@ -1,6 +1,6 @@
 # Recording → Interactive Bilingual Courseware
 
-**Version 2.0.0** · [Check `VERSION`](VERSION)
+**Version 2.1.0** · [Check `VERSION`](VERSION)
 
 Turn lectures, classes, workshops, meetings or training recordings from **any
 subject** into a downloadable **single-file HTML** learning experience. The
@@ -32,10 +32,56 @@ and installations keep working.
   and `libx264`
 - Noto Sans CJK or equivalent Chinese-font support for generating slide images
 - Local faster-whisper ASR weights (may download upon first use)
-- No local translation model. ChatGPT prepares a timestamp-ID translation JSON;
-  local Ollama translation is optional only when explicitly selected.
+- No local translation model required: the active AI agent prepares an
+  ID-keyed Simplified Chinese translation JSON. Local Ollama translation is
+  optional only when explicitly selected.
+
+## Install for an AI coding assistant
+
+This repository uses the common `SKILL.md` format. The agent needs permission
+to read files and execute Python/FFmpeg; pasting `SKILL.md` into a web-only AI
+chat cannot by itself run the scripts.
+
+For project-scoped installation, place the **whole repository** (not just
+`SKILL.md`) in one of these locations:
+
+| Agent | Skill folder relative to your project |
+| --- | --- |
+| Codex, Cursor, Gemini CLI, OpenCode | `.agents/skills/recording-to-bilingual-ppt/` |
+| Claude Code | `.claude/skills/recording-to-bilingual-ppt/` |
+
+Example for the shared `.agents` location, from your project root:
+
+```bash
+mkdir -p .agents/skills
+git clone https://github.com/abincn/recording-to-bilingual-ppt-skill.git \
+  .agents/skills/recording-to-bilingual-ppt
+python3 -m pip install -r .agents/skills/recording-to-bilingual-ppt/requirements.txt
+```
+
+For Claude Code, replace `.agents/skills` with `.claude/skills`. The local
+folder is named `recording-to-bilingual-ppt` to match the frontmatter
+`name` in `SKILL.md`. On Windows use equivalent PowerShell commands and
+`python` if `python3` is unavailable. Follow the FFmpeg, font and ASR
+requirements above.
+
+The skill is **AI-provider neutral**: its host AI translates and plans the
+lesson, while Python handles deterministic media and HTML generation. To invoke
+it, ask the agent: "Use recording-to-bilingual-ppt for this lecture audio.
+Generate an offline single-file Chinese-English interactive HTML lesson, with
+automatic Chinese translation and no mandatory manual proofreading."
+
+Update an installed copy with
+`git -C .agents/skills/recording-to-bilingual-ppt pull --ff-only` (adjust the path
+for Claude). `VERSION` identifies the release; it does **not** install
+updates automatically.
 
 ## Generate a finished lesson
+
+The commands in this section assume you are in the **skill repository root**
+and `lecture.m4a` is in that directory. AI agents working elsewhere should
+instead invoke the scripts by their **absolute paths** and pass absolute audio
+and output paths, as shown in `SKILL.md`.
 
 **1. Transcribe the actual recording**
 
@@ -48,8 +94,8 @@ This produces `enhanced_master.wav` and `merged_cues.json`.
 
 **2. Curate content and translations**
 
-- Translate each English cue with ChatGPT to Simplified Chinese in a 1-based
-  JSON map (`"1"`, `"2"`, ...), preserving figures, formulas and names.
+- Have the current AI agent translate each English cue to Simplified Chinese
+  in a 1-based JSON map (`"1"`, `"2"`, ...), preserving figures, formulas and names.
   **Manual Chinese proofreading is not required**; flag uncertain ASR text.
 - Analyze this specific transcript and write a source-anchored
   `courseware-plan.json`, including cue ID ranges and appropriate layouts:
@@ -128,7 +174,7 @@ python3 scripts/build_web.py --version
 python3 -B -m unittest discover -s tests -v
 ```
 
-`VERSION` contains the authoritative SemVer, starting at `2.0.0`. Every new
+`VERSION` contains the authoritative SemVer (currently `2.1.0`). Every new
 release updates that file (and this visible release text); the CLIs, HTML
 footer and `manifest.json` automatically use the same value.
 

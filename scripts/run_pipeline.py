@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end lecture audio -> single offline HTML or optional bilingual PPTX.
 
-Transcription stays local. Translation defaults to user/ChatGPT-supplied JSON;
+Transcription stays local. Translation defaults to host-AI-supplied JSON;
 an explicitly selected Ollama endpoint is also supported. The program itself
 does not upload recordings or transcripts to remote services.
 """
@@ -220,7 +220,7 @@ def main():
     ap.add_argument("--language", default="en")
     ap.add_argument("--translations", help="Offline Chinese JSON (1-based keys), bypassing Ollama")
     ap.add_argument("--translator", choices=("provided", "ollama"), default="provided",
-                    help="Use supplied/ChatGPT translations by default; local Ollama requires opt-in")
+                    help="Use host-AI/user-supplied translations by default; local Ollama requires opt-in")
     ap.add_argument("--courseware-plan", help="Curated topic-aligned JSON plan; required for finished courseware")
     ap.add_argument("--ollama-model", default="qwen2.5:7b")
     ap.add_argument("--ollama-url", default="http://127.0.0.1:11434")
@@ -270,7 +270,7 @@ def main():
         print(f"Transcript ready: {transcript_path}. Supply --translations JSON and --resume for the full build.")
         return
     if args.translator == "provided" and not args.translations:
-        ap.error("Provide --translations with ChatGPT/user translations, or explicitly choose --translator ollama")
+        ap.error("Provide --translations with host-AI/user translations, or explicitly choose --translator ollama")
     if args.translator == "ollama" and args.translations:
         ap.error("Choose either --translator ollama or --translations, not both")
     chinese = translate(cues, source_json=args.translations,
