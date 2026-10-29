@@ -1,63 +1,133 @@
 #!/usr/bin/env python3
-"""Clean python-pptx builder for recording-to-bilingual-ppt.
-
-Reads a manifest JSON:
-  {"slide_width_in": 13.333, "slide_height_in": 7.5,
-   "bar_color": [246, 251, 243],
-   "slides": [{"picture": "slide01.png", "video": "slide01.mp4",
-               "poster": "poster.png", "notes": "..."}, ...]}
-
-Places each picture on top (10.124 x 5.695 in, centred) and each video
-strip at the bottom (0, 5.695 in, 13.333 x 1.805 in), sets the slide
-background to the bar colour, and saves a NEW presentation.
-
-Do NOT strip media shapes from an existing PPT and re-add videos:
-orphaned media parts stay in the package and roughly double its size.
-Rebuild from scratch with this script instead.
-
-Requires: python-pptx (pip install python-pptx)
-Usage: python3 build_ppt.py --manifest manifest.json --out courseware.pptx
-"""
-import argparse, json, os
+"""Build a clean PPTX containing per-slide original-video subtitles and optional editable text."""
+from __future__ import annotations
+import argparse
+import math
+from pathlib import Path
 from pptx import Presentation
-from pptx.util import Inches, Emu
 from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.util import Inches, Pt
+from pipeline_core import palette, read_json, safe_project_file, rgb
+
+def set_autoplay(slide):
+    """python-pptx movie timing is indefinite (click); 0 starts at slide entry."""
+    videos = slide._element.xpath(".//p:video")
+    if len(videos) != 1:
+        raise ValueError("Expected exactly one video timing element on this slide")
+    starts = videos[0].xpath(".//p:stCondLst/p:cond")
+    if len(starts) != 1:
+        raise ValueError("Cannot locate video start condition")
+    starts[0].set("delay", "0")
+
+def add_editable_text(slide, title, bullets, width, height, bg):
+    # All visible slide words are PowerPoint text, never a flattened image.
+    dark = RGBColor(*rgb(palette(bg)["text_color"]))
+    margin = Inches(.7)
+    title_box = slide.shapes.add_textbox(margin, Inches(.35), width-2*margin, Inches(1.05))
+    tf = title_box.text_frame
+    tf.word_wrap = True
+    tf.clear()
+    para = tf.paragraphs[0]
+    para.text = str(title)
+    para.font.name = "Noto Sans CJK SC"
+    para.font.bold = True
+    para.font.size = Pt(30)
+    para.font.color.rgb = dark
+    para.alignment = PP_ALIGN.LEFT
+    body_height = height-Inches(1.9)
+    if body_height < Inches(.5):
+        raise ValueError("Too little slide area above the subtitle strip")
+    bullets = list(bullets)[:6]
+    available_pt = body_height / 12700
+    content_width_pt = (width-2*margin) / 12700
+    body_size = None
+    for candidate in (20, 18, 16, 14):
+        approx_chars_per_line = max(8, content_width_pt / (candidate*.59))
+        rows = sum(max(1, math.ceil(len(str(item))/approx_chars_per_line)) for item in bullets)
+        if rows*candidate*1.30 + len(bullets)*8 <= available_pt:
+            body_size = candidate
+            break
+    if body_size is None:
+        raise ValueError("Editable text would overflow into the subtitle bar; reduce content")
+    body = slide.shapes.add_textbox(margin, Inches(1.6), width-2*margin, body_height)
+    body_tf = body.text_frame
+    body_tf.word_wrap = True
+    body_tf.vertical_anchor = MSO_ANCHOR.TOP
+    body_tf.clear()
+    for i, item in enumerate(bullets):
+        p = body_tf.paragraphs[0] if i == 0 else body_tf.add_paragraph()
+        p.text = "• " + str(item)
+        p.font.name = "Noto Sans CJK SC"
+        p.font.size = Pt(body_size)
+        p.font.color.rgb = dark
+        p.space_after = Pt(8)
+    if len(str(title)) > 130 or any(len(str(b)) > 200 for b in bullets):
+        raise ValueError("Slide text too long for a readable editable layout")
+
+def build(manifest, output, *, mode=None, autoplay=None, overwrite=False):
+    manifest = Path(manifest).resolve()
+    data = read_json(manifest)
+    if not data.get("slides"):
+        raise ValueError("Manifest requires nonempty slides")
+    output = Path(output).resolve()
+    if output.exists() and not overwrite:
+        raise FileExistsError(f"Output exists (use --force to overwrite): {output}")
+    deck = Presentation()
+    deck.slide_width = Inches(float(data.get("slide_width_in", 13.333)))
+    deck.slide_height = Inches(float(data.get("slide_height_in", 7.5)))
+    height = deck.slide_height
+    width = deck.slide_width
+    strip = int(height * float(data.get("subtitle_fraction", 1.805/7.5)))
+    if not 0.15 <= strip/height <= 0.40:
+        raise ValueError("Subtitle strip must occupy between 15% and 40% of slide height")
+    top_height = height-strip
+    blank = deck.slide_layouts[6]
+    mode = mode or data.get("mode", "image")
+    autoplay = bool(data.get("autoplay", False)) if autoplay is None else autoplay
+    if mode not in {"image", "editable"}:
+        raise ValueError("Mode must be image or editable")
+    for i, item in enumerate(data["slides"], 1):
+        colors = palette(item.get("bar_color", data.get("bar_color")), item.get("text_color"))
+        slide = deck.slides.add_slide(blank)
+        slide.background.fill.solid()
+        slide.background.fill.fore_color.rgb = RGBColor(*rgb(colors["bar_color"]))
+        if mode == "image":
+            from PIL import Image
+            path = safe_project_file(manifest.parent, item["picture"])
+            with Image.open(path) as img:
+                iw, ih = img.size
+            fitted_width = min(int(width), int(top_height * iw/ih))
+            fitted_height = min(int(top_height), int(width * ih/iw))
+            slide.shapes.add_picture(str(path), int((width-fitted_width)/2), int((top_height-fitted_height)/2),
+                                     width=fitted_width, height=fitted_height)
+        else:
+            add_editable_text(slide, item["title"], item.get("bullets", []), width, top_height, colors["bar_color"])
+        slide.shapes.add_movie(
+            str(safe_project_file(manifest.parent, item["video"])),
+            0, top_height, width, strip,
+            poster_frame_image=str(safe_project_file(manifest.parent, item["poster"])),
+            mime_type="video/mp4",
+        )
+        if autoplay:
+            set_autoplay(slide)
+        frame = slide.notes_slide.notes_text_frame
+        if frame is not None:
+            frame.text = str(item.get("notes", f"Slide {i}: cleaned original audio; bilingual centred subtitles"))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    deck.save(output)
+    return output
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--mode", choices=["image", "editable"])
+    ap.add_argument("--autoplay", action="store_true", default=None)
+    ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
-    man = json.load(open(args.manifest, encoding="utf-8"))
-    base = os.path.dirname(os.path.abspath(args.manifest))
-    prs = Presentation()
-    prs.slide_width = Emu(int(man.get("slide_width_in", 13.333) * 914400))
-    prs.slide_height = Emu(int(man.get("slide_height_in", 7.5) * 914400))
-    blank = prs.slide_layouts[6]
-    if "bar_color" not in man:
-        raise SystemExit("manifest must contain bar_color: the sampled slide background [R, G, B]. No fixed default is used.")
-    r, g, b = man["bar_color"]
-    pic_w, pic_h = Inches(10.124), Inches(5.695)
-    left = Inches((13.333 - 10.124) / 2)
-    for item in man["slides"]:
-        slide = prs.slides.add_slide(blank)
-        fill = slide.background.fill
-        fill.solid()
-        fill.fore_color.rgb = RGBColor(r, g, b)
-        slide.shapes.add_picture(os.path.join(base, item["picture"]),
-                                 left, Inches(0), width=pic_w, height=pic_h)
-        slide.shapes.add_movie(os.path.join(base, item["video"]),
-                               Inches(0), Inches(5.695),
-                               width=Inches(13.333), height=Inches(1.805),
-                               poster_frame_image=os.path.join(base, item["poster"]))
-        if item.get("notes"):
-            ns = slide.notes_slide
-            for ph in ns.placeholders:
-                if ph.has_text_frame:
-                    ph.text_frame.text = item["notes"]
-                    break
-    prs.save(args.out)
-    print(f"saved {args.out} ({os.path.getsize(args.out)} bytes, {len(man['slides'])} slides)")
+    path = build(args.manifest, args.out, mode=args.mode, autoplay=args.autoplay, overwrite=args.force)
+    print(f"Saved {path} ({path.stat().st_size} bytes)")
 
 if __name__ == "__main__":
     main()

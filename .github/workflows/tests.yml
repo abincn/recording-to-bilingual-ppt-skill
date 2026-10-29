@@ -1,0 +1,19 @@
+name: Test bilingual PPT skill
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install media and font support
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+          python -m pip install 'python-pptx>=1.0.2,<2' 'Pillow>=10,<13'
+      - name: Run offline tests
+        run: python -B -m unittest discover -s tests -v

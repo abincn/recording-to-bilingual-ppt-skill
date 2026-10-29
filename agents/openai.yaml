@@ -1,0 +1,4 @@
+interface:
+  display_name: "Recording to Bilingual PPT"
+  short_description: "Turn lecture audio into original-voice Chinese-English PPT"
+  default_prompt: "Turn my lecture recording into a bilingual PowerPoint with the speaker's original voice and synchronized Chinese-English subtitles."
