@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """End-to-end local lecture audio -> bilingual PPTX (image or editable text).
 
-Transcription stays local. Translation uses a local Ollama endpoint, or a user
-supplied JSON file. No cloud upload is performed by this program.
+Transcription stays local. Translation defaults to user/ChatGPT-supplied JSON;
+an explicitly selected Ollama endpoint is also supported. The program itself
+does not upload recordings or transcripts to remote services.
 """
 from __future__ import annotations
 import argparse
@@ -11,6 +12,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
@@ -22,6 +24,7 @@ from pipeline_core import (check_cues, contrast, cues_from_words, hex_color,
 from make_ass import render as render_ass
 from make_videos import duration as media_duration, render_one
 from build_ppt import build
+from courseware_plan import body_lines, render_image, specs_from_plan, validate_plan
 
 def external(command):
     result = subprocess.run(command, capture_output=True, text=True)
@@ -205,6 +208,9 @@ def main():
     ap.add_argument("--model", default="small", help="faster-whisper model; downloads model on first use")
     ap.add_argument("--language", default="en")
     ap.add_argument("--translations", help="Offline Chinese JSON (1-based keys), bypassing Ollama")
+    ap.add_argument("--translator", choices=("provided", "ollama"), default="provided",
+                    help="Use supplied/ChatGPT translations by default; local Ollama requires opt-in")
+    ap.add_argument("--courseware-plan", help="Curated topic-aligned JSON plan; required for finished courseware")
     ap.add_argument("--ollama-model", default="qwen2.5:7b")
     ap.add_argument("--ollama-url", default="http://127.0.0.1:11434")
     ap.add_argument("--mode", choices=("image", "editable"), default="image")
@@ -240,22 +246,32 @@ def main():
     if args.stage == "transcribe":
         print(f"Transcript ready: {transcript_path}. Supply --translations JSON and --resume for the full build.")
         return
+    if args.translator == "provided" and not args.translations:
+        ap.error("Provide --translations with ChatGPT/user translations, or explicitly choose --translator ollama")
+    if args.translator == "ollama" and args.translations:
+        ap.error("Choose either --translator ollama or --translations, not both")
     chinese = translate(cues, source_json=args.translations,
                         model=args.ollama_model, url=args.ollama_url)
     write_json(project/"sentence_cn.json", {str(k):v for k,v in chinese.items()})
-    specs = partition_cues(cues, whole, min(args.slides, len(cues)))
-    if args.slides > len(cues):
-        print(f"Requested {args.slides} slides but only {len(cues)} sentences; reducing slide count")
+    curated = validate_plan(read_json(args.courseware_plan), cues, whole) if args.courseware_plan else None
+    if curated:
+        specs = specs_from_plan(curated, cues, whole)
+    else:
+        specs = partition_cues(cues, whole, min(args.slides, len(cues)))
+        print("WARNING: No --courseware-plan; output is an extractive DRAFT, not finished courseware.",
+              file=sys.stderr)
+        if args.slides > len(cues):
+            print(f"Requested {args.slides} slides but only {len(cues)} sentences; reducing slide count")
     manifest = {"slide_width_in":13.333, "slide_height_in":7.5,
                 "subtitle_fraction":1.805/7.5, "mode":args.mode,
-                "autoplay":args.autoplay, "slides":[]}
+                "autoplay":args.autoplay, "draft":not bool(curated), "slides":[]}
     spec_map = {}
     for i, spec in enumerate(specs, 1):
         number = f"{i:02d}"
-        color = colors[(i-1)%len(colors)]
+        outline = curated[i-1] if curated else simple_outline(cues, spec, i)
+        color = hex_color(outline.get("bar_color", colors[(i-1)%len(colors)]))
         spec["bar_color"] = color
         spec_map[str(i)] = spec
-        outline = simple_outline(cues, spec, i)
         audio = videos/f"slide{number}.mp3"
         ass = videos/f"slide{number}.ass"
         video = videos/f"slide{number}.mp4"
@@ -263,7 +279,10 @@ def main():
         post = videos/f"poster{number}.png"
         split_audio(master, spec["start"], spec["end"], audio, args.force or args.resume)
         if args.mode == "image":
-            slide_image(pic, outline["title"], outline["bullets"], color)
+            if curated:
+                render_image(pic, outline, color, font_path())
+            else:
+                slide_image(pic, outline["title"], outline["bullets"], color)
             # Per-slide sample from the actual rendered image, not a deck constant.
             from PIL import Image
             with Image.open(pic) as image:
@@ -271,12 +290,17 @@ def main():
         poster(post, color)
         manifest["slides"].append({
             "picture":str(pic.relative_to(project)),
-            "title":outline["title"], "bullets":outline["bullets"],
+            "title":outline["title"],
+            "layout":outline["layout"] if curated else "bullets",
+            "bullets":body_lines(outline) if curated else outline["bullets"],
+            "table":outline.get("table") if curated else None,
+            "section":outline.get("section") if curated else None,
             "audio":str(audio.relative_to(project)),
             "ass":str(ass.relative_to(project)),
             "video":str(video.relative_to(project)),
             "poster":str(post.relative_to(project)), "bar_color":color,
-            "notes":f"Recording {spec['start']:.2f}–{spec['end']:.2f}s. Original voice, cleaned; sentence-level bilingual ASS, middle-centred.",
+            "notes":(outline.get("notes", "") + "\n" if curated else "") +
+                     f"Recording {spec['start']:.2f}–{spec['end']:.2f}s. Original voice, cleaned; sentence-level bilingual ASS, middle-centred.",
         })
     write_json(project/"slides.json", spec_map)
     styles = render_ass(cues, {str(k):v for k,v in chinese.items()}, spec_map, videos)

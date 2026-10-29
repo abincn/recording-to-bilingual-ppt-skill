@@ -1,154 +1,121 @@
 ---
 name: recording-to-bilingual-ppt
-description: Convert a lecture recording or voice note into a Chinese-English subtitled PowerPoint with cleaned original speaker audio on every slide. Use for bilingual courseware, sentence-timed subtitles, per-slide subtitle strips, and optionally editable PowerPoint text. Never substitute synthetic narration for the recording.
+description: Turn lecture, training, meeting or classroom recordings from any subject into content-specific Chinese-English PowerPoint courseware with the original cleaned speaker audio and synchronized bilingual subtitles. Use for lecture transcription, translation, topic-aligned slide planning, examples, diagrams, tables, steps, formulas, and editable or image-based PPT delivery.
 ---
 
 # Recording → bilingual PPT
 
-Use the bundled scripts for a reproducible, inspectable workflow. Read `README.md`
-for prerequisites and user-facing setup; it documents the local Whisper/Ollama options.
+Build a **different lesson from each recording**. Never import example content, numbers,
+slides or discipline-specific assumptions into a new job. Read `README.md` for setup
+and `references/plan-schema.md` when authoring a finished courseware plan.
 
-## Rules
+## Non-negotiable rules
 
-- Keep the **original speaker's voice**. Audio processing may remove noise and normalize
-  volume, but cannot recover words missing from the microphone.
-- Transcribe locally with **word timestamps**. Confirm any ambiguous figures, formulae,
-  names and terminology with the user; never silently "correct" the source.
-- Make sentence-based English cues, preserve complete sentences, then translate
-  each cue into Chinese with the same 1-based identifier. Match counts,
-  identifiers, Chinese-script presence and Arabic-digit quantities automatically.
-  Retry invalid model outputs; do not require manual Chinese proofreading by default.
-  If punctuation is absent, pause-based/semantic sentence boundaries require review.
-- **Translation source is chosen by the user, never assumed.** Local Ollama is
-  only one option; assistant-supplied or user-supplied `sentence_cn.json` is
-  equally valid, and is the default when the user has declined local-model
-  translation. Do not start a local-model install or download on that basis.
-- **Default slide mode is curated hand-table courseware, not extractive draft.**
-  The extractive outline (first cue as title, next cues as bullets) is only a
-  fallback draft, must be labelled as such in delivery, and must never be
-  delivered as finished courseware when the user expects hand-designed slides.
-  See "Curated hand-table mode" below. This rule overrides any pipeline default
-  that produces extractive titles such as "Okay." as a slide title.
-- **Subtitle cue merging (curated mode).** Merge short cues (< 2.5 s or
-  < 12 characters) into the next cue, drop filler-only cues that carry no
-  content (for example a lone "Okay."), and never split a sentence across
-  cues or slides. Long cues that contain board-writing pauses are kept whole.
+- Preserve the lecturer's **original voice**; reduce noise and normalize volume without
+  inventing speech or replacing it with synthetic narration.
+- Transcribe with time-stamped words, form coherent sentence cues and translate each cue
+  with the same 1-based ID. Preserve numbers, formulas, names and technical terms.
+  Chinese translation is automatic **without mandatory human proofreading**.
+- **Do not start a local translation model by default.** If the user declines local
+  translation, use ChatGPT to produce `sentence_cn.json` and pass `--translations`.
+  Ollama is optional, only when explicitly selected with `--translator ollama`.
+  Transcription via local Whisper is separate from translation.
+- A finished deck **requires content-specific planning** from the actual recording.
+  No fixed subject, 10-slide quota, chapter sequence, accounting tables or default
+  visual type. The bundled extractive auto-outline is **draft-only** and must be
+  called a draft, never a finished curated lesson.
+- Each slide covers complete, consecutive transcript cue IDs. Do not split or omit
+  taught content, alter speaker chronology, repeat audio, or break alignment to
+  meet a target slide count. Optional filler reduction must not remove meaning.
+- Use only values and claims supported by the recording or clearly marked external
+  material. Do not silently change uncertain ASR figures. When arithmetic exists,
+  check it; a derived figure needs a derivation note and a source-verification flag.
+  Non-numeric lessons do not need artificial calculations or data tables.
+- Keep all slide text above the reserved subtitle strip. Preserve the actual 1920×260
+  colored subtitle background with English first, Chinese second, alignment 5,
+  legible CJK fonts, >=4.5:1 contrast, and QA frames for actual renders.
+- The final PPT must have one correctly timed original-audio video strip per
+  narrated slide. Image mode is not text-editable; editable mode uses native
+  PowerPoint shapes and native tables for table slides.
+- State any ASR ambiguity, correction, unmatched number, source limitation,
+  slide mode, and playback caveat in delivery. Never claim manual verification
+  unless it actually occurred.
 
-## Curated hand-table mode (default)
+## Content-adaptive planning (default for finished courseware)
 
-Design the slide deck from the lecture's structure, not from transcript order
-alone. For an exercise-driven lecture, the deck is typically: cover, the
-section map, core rules, one slide per exercise with a bilingual table,
-worked examples, common mistakes, and a review checklist.
+1. **Understand the recording first.** Determine subject, audience, learning goal,
+   main topics, definitions, worked examples, demonstrations and question segments.
+   Identify where topics start and stop by cue ID, not equal clock intervals.
+2. **Select structures that fit the information.** Examples—not required sections:
+   - Concepts/explanations → concise bilingual bullet cards.
+   - Procedures or lab/workshop demonstrations → numbered steps.
+   - Comparisons, categories or experimental data → comparison/native table.
+   - Equations → formula with interpretation and units.
+   - Literature, history, interviews and speeches → quotation plus context.
+   - Numerical exercises → worked examples and calculation checks.
+   - Storytelling or case studies → chronological sections; tables only if useful.
+   Choose a suitable mix, and omit irrelevant types. Add maps, plots or diagrams
+   only when they clarify the actual material and are source-grounded.
+3. **Create a source-anchored plan** using `references/plan-schema.md`. The
+   `--courseware-plan` JSON explicitly assigns each slide's cue range, title,
+   layout and content. Plan count is determined by natural topics; `--slides`
+   applies only to draft fallback.
+4. **Cross-check every slide against its cue range**, including translated key
+   terms, numbers and the ordering of examples. If an assertion is inferred,
+   label the inference in notes or footnotes. A unique example never becomes
+   a universal rule for other recordings.
+5. **Build and inspect** image or editable output. Tables are native editable
+   PowerPoint tables when `--mode editable`; other layouts stay text-editable.
 
-- **Slide images are hand-designed** (2560×1440 in the reference deck, same
-  background as the subtitle bar). Each table is bilingual: English item name
-  plus Chinese, with Change / Adjustment / Amount columns as the exercise
-  requires, a distinct total row, and a footnote for anything derived or
-  uncertain. In image mode the slide text is **not editable in PowerPoint**;
-  in editable mode the same tables must be native PowerPoint tables, not
-  bullet lists with the same numbers.
-- **Arithmetic must close exactly.** Every table total is recomputed from its
-  rows before delivery (for example 106,800 + 41,700 − 11,000 + 4,800 + 2,750
-  + 4,900 − 1,700 = 148,250). A row whose number is back-derived from the
-  total, or whose number was not clearly spoken, is footnoted with its
-  derivation and marked for textbook verification; it is never presented as
-  if it were spoken. A row whose number is genuinely unknown is shown as
-  "—", not filled in.
-- **Slide timing is topic-aligned, not equal-partitioned.** Each curated
-  slide covers the recording range for its topic, aligned to sentence
-  boundaries. Review slides may splice non-contiguous ranges at sentence
-  boundaries only; mark them `review:true` in `slides.json`.
-- **Corrections are listed, never silent.** When a later, clearer
-  transcription changes a table figure (for example inventory decrease
-  6,800 → 4,800, prepaid decrease 750 → 2,750, or a previously blank
-  depreciation row filled with 81,750), delivery must list the old figure,
-  the new figure, and where the new figure came from.
-- Worked example: `examples/ch13-curated.md` records the verified Chapter 13
-  tables (13-3 = 66,730; 13-4 = 502,960; 13-5 = 148,250; land gain 13,300,
-  net investing −39,700; bonds issued cash 420,000, redeemed cash 138,000,
-  net financing +282,000) with the derivation note for 13-4 accounts
-  receivable increase 6,000.
-- Do not send audio/transcript to cloud translation providers automatically. The provided
-  pipeline uses **local Ollama** at a loopback address, or user-supplied translation JSON.
-  Whisper model weights may be downloaded on first use; inform the user.
-- Sample the **actual per-slide background**. Calculate WCAG sRGB contrast
-  (minimum 4.5:1). Subtitle ASS style uses alignment 5 (middle-centre).
-  Any cue too tall for 1920×260 fails rather than being silently cropped.
-- Encode video strips with FFmpeg/libass, check actual durations within encoding tolerance,
-  and extract QA frames. Keep images, cleaned master and split audio in the project folder.
-- User-facing delivery must state which mode was produced: image slides are
-  **not editable text**, editable mode uses native PowerPoint text shapes.
-- Video playback is software-dependent: `--autoplay` sets the PPTX video timing to
-  begin on slide entry, but inspect in the recipient's PowerPoint version.
-- Flag transcript/table number disagreements. Never invent numbers or claim that the
-  extractive fallback is a human-verified lecture summary.
+The skill's general layouts are `bullets`, `steps`, `table`, `comparison`,
+`formula`, and `quote`. A special diagram or illustration may be supplied
+as a designed slide image when suitable; ensure its text and evidence remain
+readable. Never force a lecture into a layout merely because it is available.
 
-## Standard workflow
+## Workflow
 
-1. Check `ffmpeg`, `ffprobe`, CJK fonts, Python requirements, and optional Ollama.
-2. For a full run, call:
+1. Check Python dependencies, FFmpeg/libass/libx264/libmp3lame, ffprobe,
+   and Chinese fonts; use the user's preferred ASR/translation environment.
+2. Produce the original cleaned audio and timestamped English cues:
+
+   ```bash
+   python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output --stage transcribe
+   ```
+
+3. Use ChatGPT (or the explicitly chosen translation source) to create
+   `lecture-output/sentence_cn.json` with all `"1"`, `"2"`, ... cue keys,
+   and independently curate `lecture-output/courseware-plan.json` from
+   the **actual** recording. See `references/plan-schema.md`.
+4. Generate finished image or editable courseware:
 
    ```bash
    python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
-     --slides 10 --mode image --autoplay --ollama-model qwen2.5:7b
+     --resume --translations ./lecture-output/sentence_cn.json \
+     --courseware-plan ./lecture-output/courseware-plan.json --mode editable --autoplay
    ```
 
-   For native editable slide text, pass `--mode editable`. Multiple backgrounds:
-   `--colors F6FBF3,243044,EEE8D5`.
+   For a preliminary extractive draft only, omit `--courseware-plan`
+   and choose `--slides N`; label the result **DRAFT**. Do not deliver it
+   as curated courseware.
+5. If the user explicitly prefers Ollama, pass `--translator ollama`
+   in place of `--translations`. No other network translation is automatic.
+6. Run `scripts/validate.py`, check `qa/` screenshots and inspect the
+   slides in the target presentation app. Use
+   `python3 -B -m unittest discover -s tests -v` after code changes.
 
-   **Curated mode (default for finished courseware):** do not ship the
-   pipeline's extractive deck as-is. First design the curated deck and its
-   topic-aligned `slides.json` (see "Curated hand-table mode"), render or
-   supply the hand-table slide images, reuse the pipeline's cleaned audio,
-   merged bilingual cues and middle-centred subtitle videos for those
-   ranges, then build the PPTX from the curated images + videos with
-   `scripts/build_ppt.py` (image mode) or native tables (editable mode).
-   Recompute every table total and record any correction before delivery.
+## Output contract
 
-3. Only if the user explicitly wants to supply translations, or Ollama is
-   unavailable, offer the optional two-pass path:
+- `merged_cues.json`: sentence-level `{start,end,en}` transcript.
+- `sentence_cn.json`: exact 1-based Chinese translations.
+- `courseware-plan.json`: selected topic ranges and visual layouts.
+- `slides.json`: actual sentence-timed audio/video ranges (not equal slices).
+- `manifest.json`: PPT shape content, subtitle videos, timing and notes.
+- `enhanced_master.wav`, `subtitle_videos/`, `slide_images/`, `qa/`,
+  and final `courseware-image.pptx` or `courseware-editable.pptx`.
 
-   ```bash
-   python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
-     --stage transcribe
-   # Review merged_cues.json; prepare sentence_cn.json with exact "1", "2", ... keys.
-   python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
-     --translations ./lecture-output/sentence_cn.json --resume --mode editable
-   ```
+The example in `examples/ch13-curated.md` is **only** an accounting example.
+Its numbers and layout choices must never be loaded into another lecture.
 
-4. Run `python3 scripts/validate.py --manifest lecture-output/manifest.json
-   --ppt lecture-output/courseware-image.pptx` (change filename for editable mode).
-5. Inspect `lecture-output/qa/` for visual clipping and PPT playback controls.
-   The program performs automatic Chinese coverage and number checks; human
-   *Chinese translation proofreading* is optional, never a default gate.
-6. Present the PPTX, the mode (curated hand-table image, curated hand-table
-   editable, or extractive draft — labelled as a draft), the selected
-   backgrounds and text colors, every table arithmetic check, every
-   correction versus a previous draft, and any unresolved ASR/numerical
-   discrepancies to the user.
-
-## Input and outputs
-
-- Input: lecture audio file, and optionally existing `sentence_cn.json`.
-- Transcription: `merged_cues.json` contains `{start,end,en}` entries.
-- Slide timing: `slides.json`, per-slide `{start,end,offset,cues,bar_color}`.
-  Special review/spliced slides may use `segments`; mark `review:true` if they
-  intentionally repeat source cues. Never splice a word or sentence.
-- `manifest.json`: one item per slide with `bar_color`, relative `audio`,
-  `ass`, `video`, `poster`, optional `picture`, `title`, `bullets`, `notes`.
-- Outputs: `enhanced_master.wav`, per-slide MP3/ASS/MP4, QA frames and final PPTX.
-
-## Individual scripts
-
-- `scripts/pipeline_core.py`: pure validators, sentence timing, contrast and safe paths.
-- `scripts/make_ass.py`: construct bilingual ASS with per-slide colors.
-- `scripts/make_videos.py` or `make_videos.sh`: actually render synchronized MP4s.
-- `scripts/build_ppt.py`: create image-slide or editable-text PPT from a manifest,
-  with one embedded MP4 per slide and optional autoplay.
-- `scripts/validate.py`: inspect text, cue mapping, media duration, fonts/QA
-  sample visibility and PPTX structure.
-- `scripts/run_pipeline.py`: end-to-end orchestration.
-
-Run `python3 -B -m unittest discover -s tests -v` after changes. Do not change
-existing source media or overwrite previous generated files without explicit `--force`.
+In delivery, summarize the actual lecture, slide structure and languages,
+identify editable/image mode, disclose ambiguities and source corrections,
+and mention that embedded video autoplay depends on PowerPoint compatibility.

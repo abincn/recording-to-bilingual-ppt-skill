@@ -67,6 +67,17 @@ class IntegrationTests(unittest.TestCase):
                     starts = slide._element.xpath(".//p:video//p:stCondLst/p:cond")
                     self.assertEqual(len(starts),1)
                     self.assertEqual(starts[0].get("delay"),"0")
+            items[0]["layout"] = "table"
+            items[0]["table"] = {
+                "columns": ["Term / 术语", "Value / 数值"],
+                "rows": [{"cells": ["Revenue / 收入", "42"], "emphasis": True}],
+                "footnote": "Value from example / 示例数值"
+            }
+            write_json(manifest, {"slides": items, "mode":"editable", "autoplay":True})
+            table_deck = folder/"native-table.pptx"
+            build(manifest, table_deck)
+            self.assertEqual(validate(manifest, table_deck)["slides"], 2)
+            self.assertEqual(sum(shape.has_table for shape in Presentation(table_deck).slides[0].shapes), 1)
 
 if __name__ == "__main__":
     unittest.main()

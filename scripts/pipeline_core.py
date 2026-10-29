@@ -62,6 +62,8 @@ def require_translation(cues, translations):
 def numbers_preserved(english, chinese):
     """Automated guard against dropped or invented Arabic-digit quantities."""
     def tokens(text):
+        # Some ASR outputs insert spaces around thousands separators.
+        text = re.sub(r"(?<=\d)\s*,\s*(?=\d{3}(?!\d))", ",", text)
         found = re.findall(r"\d[\d,]*(?:\.\d+)?", text)
         return sorted(token.replace(",", "") for token in found)
     return tokens(english) == tokens(chinese)

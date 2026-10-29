@@ -23,6 +23,7 @@ class CoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             require_translation(cues, {"2":"二。","3":"三。"})
         self.assertTrue(numbers_preserved("13-3 = 10", "13减去3等于10"))
+        self.assertTrue(numbers_preserved("$75 ,800", "75,800美元"))
         self.assertFalse(numbers_preserved("13-3 = 10", "13减去4等于10"))
 
     def test_automated_translation_retry_and_loopback_check(self):

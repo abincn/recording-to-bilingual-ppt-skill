@@ -65,6 +65,57 @@ def add_editable_text(slide, title, bullets, width, height, bg):
     if len(str(title)) > 130 or any(len(str(b)) > 200 for b in bullets):
         raise ValueError("Slide text too long for a readable editable layout")
 
+
+def add_editable_table(slide, item, width, height, bg):
+    """Render any discipline's structured data as a native PowerPoint table."""
+    table_info = item["table"]
+    headers, rows = table_info["columns"], table_info["rows"]
+    ink = RGBColor(*rgb(palette(bg)["text_color"]))
+    light = RGBColor(235, 244, 247)
+    strong = RGBColor(205, 227, 233)
+    white = RGBColor(255, 255, 255)
+    title = slide.shapes.add_textbox(Inches(.65), Inches(.30),
+                                     width-Inches(1.3), Inches(.86))
+    p = title.text_frame.paragraphs[0]
+    p.text = item["title"]
+    p.font.name = "Noto Sans CJK SC"
+    p.font.size = Pt(29)
+    p.font.bold = True
+    p.font.color.rgb = ink
+    footnote = table_info.get("footnote", "")
+    table_height = height-Inches(1.65 if not footnote else 2.12)
+    if table_height <= 0:
+        raise ValueError("Not enough space above subtitle strip for editable table")
+    frame = slide.shapes.add_table(
+        len(rows)+1, len(headers), Inches(.65), Inches(1.28),
+        width-Inches(1.3), table_height)
+    table = frame.table
+    for ri, row in enumerate([{"cells":headers,"emphasis":True}]+rows):
+        for ci, value in enumerate(row["cells"]):
+            cell = table.cell(ri, ci)
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = strong if ri == 0 else (light if row["emphasis"] else white)
+            cell.margin_left = Inches(.10)
+            cell.margin_right = Inches(.07)
+            cell.margin_top = Inches(.04)
+            cell.margin_bottom = Inches(.03)
+            cell.text_frame.word_wrap = True
+            cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+            p = cell.text_frame.paragraphs[0]
+            p.text = str(value)
+            p.font.name = "Noto Sans CJK SC"
+            p.font.size = Pt(15 if len(headers) <= 4 else 13)
+            p.font.bold = ri == 0 or row["emphasis"]
+            p.font.color.rgb = ink
+    if footnote:
+        box = slide.shapes.add_textbox(Inches(.65), height-Inches(.72),
+                                       width-Inches(1.3), Inches(.56))
+        p = box.text_frame.paragraphs[0]
+        p.text = "Note / 注：" + footnote
+        p.font.name = "Noto Sans CJK SC"
+        p.font.size = Pt(12)
+        p.font.color.rgb = ink
+
 def build(manifest, output, *, mode=None, autoplay=None, overwrite=False):
     manifest = Path(manifest).resolve()
     data = read_json(manifest)
@@ -102,7 +153,11 @@ def build(manifest, output, *, mode=None, autoplay=None, overwrite=False):
             slide.shapes.add_picture(str(path), int((width-fitted_width)/2), int((top_height-fitted_height)/2),
                                      width=fitted_width, height=fitted_height)
         else:
-            add_editable_text(slide, item["title"], item.get("bullets", []), width, top_height, colors["bar_color"])
+            if item.get("layout") in {"table", "comparison"}:
+                add_editable_table(slide, item, width, top_height, colors["bar_color"])
+            else:
+                add_editable_text(slide, item["title"], item.get("bullets", []),
+                                  width, top_height, colors["bar_color"])
         slide.shapes.add_movie(
             str(safe_project_file(manifest.parent, item["video"])),
             0, top_height, width, strip,

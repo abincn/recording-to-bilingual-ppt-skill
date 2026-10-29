@@ -1,88 +1,94 @@
 # Recording to Bilingual PPT
 
-Make Chinese–English lecture courseware with the **original speaker's cleaned audio**,
-complete sentence-level bilingual subtitles, a reserved subtitle video strip on
-every slide, and either image-based slides or **editable PowerPoint text**.
+Turn **any** teaching, training, lecture, workshop, or interview recording into
+content-specific Chinese–English PowerPoint courseware. Preserve the lecturer's
+cleaned original voice, align sentence-level subtitles to each topic, and choose
+the slide structure from what the recording actually teaches.
+
+**Do not use a fixed deck for every class.** Accounting tables, science
+process diagrams, historical timelines and language-study quotations are
+illustrative possibilities, not universal templates. The completed deck is
+based on a source-anchored courseware plan; without such a plan the pipeline
+produces an explicitly labelled extractive **draft**.
 
 ## Requirements
 
-- Python 3.10+ and `pip install -r requirements.txt`
-- FFmpeg and ffprobe on `PATH`; FFmpeg must include `libass`, `libx264` and `libmp3lame`.
-- An installed `Noto Sans CJK SC` font (recommended; otherwise font substitution may alter subtitle layout).
-- A local Whisper model from faster-whisper (first use downloads weights).
-- For automated Chinese translation, Ollama running **locally** with a Chinese-capable
-  model, e.g. `ollama pull qwen2.5:7b`. Alternatively provide a reviewed translation JSON.
+- Python 3.10+; `pip install -r requirements.txt`
+- `ffmpeg` and `ffprobe`, with libass, libx264, libmp3lame
+- An installed Noto Sans CJK font for bilingual image slides and subtitles
+- Local Whisper transcription weights (first use may download the ASR model)
+- **No local translation model is required.** ChatGPT can translate the
+  timestamped cues and supply `sentence_cn.json`. Ollama is available only
+  when explicitly requested with `--translator ollama`.
 
-No source recordings, transcripts, credentials or personal documents are bundled.
-The normal workflow is **automatic Chinese translation without manual proofreading**.
-The pipeline retries invalid model output and validates translation IDs, Chinese
-characters and Arabic-digit quantities. Specialized terminology may still need
-review in high-stakes material.
+## Finished courseware: two passes
 
-## Quick start — local translation, image slides
-
-```bash
-python3 -m pip install -r requirements.txt
-python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
-  --slides 10 --mode image --ollama-model qwen2.5:7b --autoplay
-```
-
-For native editable PowerPoint text, switch `--mode editable`. To vary
-backgrounds per slide, add `--colors F6FBF3,273448,FFF4DD`.
-
-The output directory retains `enhanced_master.wav`, `merged_cues.json`,
-`sentence_cn.json`, `slides.json`, per-slide MP3/ASS/MP4,
-`qa/slideXX.png`, `manifest.json` and `courseware-image.pptx`
-(or `courseware-editable.pptx`).
-
-## Optional supplied translations (not the default)
-
-If Ollama is not available, transcription and translation can be separated:
+**1. Transcribe the actual lecture**
 
 ```bash
 python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
   --stage transcribe
 ```
 
-Review `lecture-output/merged_cues.json` and provide translations in
-`lecture-output/sentence_cn.json` as a JSON mapping with exactly one
-Simplified Chinese sentence per cue:
+This produces `enhanced_master.wav` and `merged_cues.json`.
 
-```json
-{"1": "第一句翻译。", "2": "第二句翻译。"}
-```
+**2. Curate its content**
 
-Resume without redoing the transcription:
+- Use ChatGPT to translate each English cue into Simplified Chinese as a
+  1-based JSON map (`"1"`, `"2"`, ...); preserve technical terms and figures.
+- Analyze that **specific** lecture, identify topic boundaries, and construct
+  `courseware-plan.json` with one or more of these layouts:
+  `bullets`, `steps`, `table`, `comparison`, `formula`, `quote`.
+- Choose the actual slide count and mix, not a predetermined number.
+- Verify the lecture supports all claims. Recompute arithmetic only when
+  relevant, flag uncertain transcription, and identify inferred values.
+- Read [the plan format](references/plan-schema.md) for exact JSON rules.
+
+**3. Render either image-based or editable PPTX**
 
 ```bash
 python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
-  --translations ./lecture-output/sentence_cn.json --resume --mode editable
+  --resume --translations ./lecture-output/sentence_cn.json \
+  --courseware-plan ./lecture-output/courseware-plan.json \
+  --mode editable --autoplay
 ```
 
-## Validate and review
+Choose `--mode image` for fixed-design slide images; with `--mode editable`,
+text and data tables are native PowerPoint objects.
+
+All narrated slides have the original speaker's cleaned audio embedded in a
+video subtitle strip. Captions are English over Chinese and remain outside
+the content area.
+
+## Draft or explicit Ollama option
+
+A preliminary **draft** can omit `--courseware-plan` and use `--slides 8`
+(or another count); its first-cue/next-cue text is not a finished lesson.
+
+Ollama is opt-in only:
+
+```bash
+python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
+  --resume --translator ollama --courseware-plan ./lecture-output/courseware-plan.json
+```
+
+Do not use this if the user declines local-model translation.
+
+## Validation
 
 ```bash
 python3 scripts/validate.py --manifest lecture-output/manifest.json \
-  --ppt lecture-output/courseware-image.pptx
+  --ppt lecture-output/courseware-editable.pptx
 python3 -B -m unittest discover -s tests -v
 ```
 
-The generated QA frames must be checked visually. Native PowerPoint playback
-can differ across desktop/mobile versions; `--autoplay` writes automatic
-video-start timing, but compatibility must be verified in the target player.
+Inspect subtitle QA frames and playback in the recipient's PowerPoint
+version: autoplay and video codecs depend on software support.
 
-The default for finished courseware is **curated hand-table slides**: a
-lecture-structure deck with bilingual tables whose totals are recomputed
-and whose derived figures are footnoted (see `SKILL.md`, "Curated hand-table
-mode", and `examples/ch13-curated.md`). The pipeline's extractive outline
-(first cue as title, next cues as bullets) is only a starting draft, not
-finished courseware, and must be labelled as a draft when delivered.
-Image mode is intentionally not editable as text; editable mode must use
-native PowerPoint tables, not bullet lists, for table slides.
+The project directory retains the cleaned audio, timestamped transcript,
+translations, plan, source-aligned slide timeline, MP3/ASS/MP4 subtitle
+strips, slide images, QA frames and final PPTX.
 
-This pipeline does not upload recordings/transcripts to third-party services.
-The Ollama URL is restricted to localhost; model downloads, if needed, are
-a separate network action. Use only trusted audio and review the transcript
-before publishing courseware.
-
-See `SKILL.md` for detailed execution rules.
+For one subject-specific example only, see
+[Chapter 13 accounting](examples/ch13-curated.md). It is **not** a default
+slide template or a source of numbers for other recordings.

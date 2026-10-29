@@ -1,8 +1,11 @@
 # Curated example: Chapter 13 Statement of Cash Flows (Indirect Method)
 
-Reference deck for the curated hand-table mode. These tables were verified
-against the lecture recording and recomputed; they are an example of the
-format, not a claim that every lecture will have the same exercises.
+**Accounting-only reference, never a universal template.** Use these tables
+only when the current recording actually covers these Chapter 13 exercises.
+For other lectures choose the subject's own structure: explanation, steps,
+comparison, formulas, quotation or other relevant visuals. These figures were
+reported as checked against this example's recording; verify against the
+current source before reusing any value.
 
 ## Core rules (one slide)
 
@@ -53,7 +56,7 @@ Discount amortisation is a non-cash add-back in Operating.
 
 ## Deck order (reference)
 
-Cover, three sections, core rules, 13-3, 13-4, 13-5, land, bonds,
-common mistakes, review checklist. Subtitle/audio ranges follow topics,
-not equal time partition; the review slide may splice ranges at sentence
-boundaries only.
+For this particular lecture: cover/overview, operating cash-flow rules,
+13-3, 13-4, 13-5, land, bonds and a closing review. This order is not a
+required slide sequence or page count for other classes. Subtitle/audio
+ranges must follow the actual recording's topic boundaries.
