@@ -71,10 +71,14 @@ The generated QA frames must be checked visually. Native PowerPoint playback
 can differ across desktop/mobile versions; `--autoplay` writes automatic
 video-start timing, but compatibility must be verified in the target player.
 
-The default slide outline is **extractive**: it takes phrases from the
-transcript, without fabricating facts. It is a usable starting draft, not a
-substitute for editorial review or verification of numerical lecture content.
-Image mode is intentionally not editable as text.
+The default for finished courseware is **curated hand-table slides**: a
+lecture-structure deck with bilingual tables whose totals are recomputed
+and whose derived figures are footnoted (see `SKILL.md`, "Curated hand-table
+mode", and `examples/ch13-curated.md`). The pipeline's extractive outline
+(first cue as title, next cues as bullets) is only a starting draft, not
+finished courseware, and must be labelled as a draft when delivered.
+Image mode is intentionally not editable as text; editable mode must use
+native PowerPoint tables, not bullet lists, for table slides.
 
 This pipeline does not upload recordings/transcripts to third-party services.
 The Ollama URL is restricted to localhost; model downloads, if needed, are
