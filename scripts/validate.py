@@ -9,14 +9,18 @@ from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from pipeline_core import check_cues, palette, read_json, require_translation, rgb, safe_project_file
-from make_ass import slide_events
+from make_ass import caption_events, slide_events
 from make_videos import duration
 
 def validate(manifest, ppt):
     manifest, ppt = Path(manifest).resolve(), Path(ppt).resolve()
     data = read_json(manifest)
     folder = manifest.parent
-    cues = check_cues(read_json(folder/"merged_cues.json"))
+    originals = check_cues(read_json(folder/"merged_cues.json"))
+    optimized = folder/"optimized_cues.json"
+    cues = check_cues(read_json(optimized if optimized.exists() else folder/"merged_cues.json"))
+    if len(cues) != len(originals) or any(a["en"] != b["en"] for a,b in zip(originals,cues)):
+        raise ValueError("Optimized time map changed the source cue IDs or English text")
     cn = require_translation(cues, read_json(folder/"sentence_cn.json"))
     specs = read_json(folder/"slides.json")
     prs = Presentation(ppt)
@@ -43,8 +47,14 @@ def validate(manifest, ppt):
         ass = safe_project_file(folder, item["ass"])
         dialogues = [line for line in ass.read_text(encoding="utf-8").splitlines()
                      if line.startswith("Dialogue:")]
-        if len(dialogues) != len(slide_cues):
-            raise ValueError(f"Slide {index}: ASS cue count does not match timeline")
+        displays = caption_events(cues, cn, spec,
+                                  merge_short=data.get("caption_merge", False),
+                                  short_threshold=data.get("short_caption", 1.0),
+                                  minimum_duration=data.get("min_caption", 1.5))
+        if len(dialogues) != len(displays):
+            raise ValueError(f"Slide {index}: ASS display count does not match timeline")
+        if [n for group in displays for n in group["ids"]] != [idx for _,_,idx in slide_cues]:
+            raise ValueError(f"Slide {index}: cue text dropped or reordered")
         for text in dialogues:
             if not re.search(r"[\u3400-\u9fff]", text.split(",", 9)[-1]):
                 raise ValueError(f"Slide {index}: dialogue lacks Chinese")

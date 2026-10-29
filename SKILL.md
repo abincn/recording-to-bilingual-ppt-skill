@@ -12,7 +12,8 @@ and `references/plan-schema.md` when authoring a finished courseware plan.
 ## Non-negotiable rules
 
 - Preserve the lecturer's **original voice**; reduce noise and normalize volume without
-  inventing speech or replacing it with synthetic narration.
+  inventing speech or replacing it with synthetic narration. Shorten only FFmpeg-confirmed
+  long silence outside original cue ranges, preserving a natural pause.
 - Transcribe with time-stamped words, form coherent sentence cues and translate each cue
   with the same 1-based ID. Preserve numbers, formulas, names and technical terms.
   Chinese translation is automatic **without mandatory human proofreading**.
@@ -27,13 +28,15 @@ and `references/plan-schema.md` when authoring a finished courseware plan.
 - Each slide covers complete, consecutive transcript cue IDs. Do not split or omit
   taught content, alter speaker chronology, repeat audio, or break alignment to
   meet a target slide count. Optional filler reduction must not remove meaning.
+  Never drop a transcript cue just to reduce subtitle flicker.
 - Use only values and claims supported by the recording or clearly marked external
   material. Do not silently change uncertain ASR figures. When arithmetic exists,
   check it; a derived figure needs a derivation note and a source-verification flag.
   Non-numeric lessons do not need artificial calculations or data tables.
 - Keep all slide text above the reserved subtitle strip. Preserve the actual 1920×260
   colored subtitle background with English first, Chinese second, alignment 5,
-  legible CJK fonts, >=4.5:1 contrast, and QA frames for actual renders.
+  legible CJK fonts, >=4.5:1 contrast, and QA frames for actual renders. Combine
+  fleeting captions only when the bilingual text remains readable and stays within a slide.
 - The final PPT must have one correctly timed original-audio video strip per
   narrated slide. Image mode is not text-editable; editable mode uses native
   PowerPoint shapes and native tables for table slides.
@@ -97,6 +100,15 @@ readable. Never force a lecture into a layout merely because it is available.
    For a preliminary extractive draft only, omit `--courseware-plan`
    and choose `--slides N`; label the result **DRAFT**. Do not deliver it
    as curated courseware.
+   **Default timing refinements:** After transcription and translation, compress
+   FFmpeg-confirmed non-speech quiet intervals lasting at least 2.5 seconds to
+   roughly 0.8 seconds (threshold -14 dB on normalized audio), preserving
+   speech samples and remapping the full timeline. Then merge subtitles shorter
+   than 1 second with adjacent same-slide cues if text fits, or extend into
+   unused caption time aiming for 1.5 seconds. Keep original cue IDs and both
+   languages intact. Use `--no-silence-compression` or `--no-caption-merge`
+   to disable. Thresholds: `--min-silence`, `--target-pause`, `--silence-db`,
+   `--short-caption`, and `--min-caption`.
 5. If the user explicitly prefers Ollama, pass `--translator ollama`
    in place of `--translations`. No other network translation is automatic.
 6. Run `scripts/validate.py`, check `qa/` screenshots and inspect the
@@ -105,7 +117,9 @@ readable. Never force a lecture into a layout merely because it is available.
 
 ## Output contract
 
-- `merged_cues.json`: sentence-level `{start,end,en}` transcript.
+- `merged_cues.json`: original sentence-level `{start,end,en}` transcript.
+- `optimized_master.wav`, `optimized_cues.json`: compressed media and remapped timeline.
+- `silence-report.json`, `subtitle-report.json`: audio savings and merged-caption counts.
 - `sentence_cn.json`: exact 1-based Chinese translations.
 - `courseware-plan.json`: selected topic ranges and visual layouts.
 - `slides.json`: actual sentence-timed audio/video ranges (not equal slices).

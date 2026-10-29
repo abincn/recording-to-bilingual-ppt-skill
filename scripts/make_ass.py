@@ -74,7 +74,75 @@ def slide_events(cues, spec):
         previous = end
     return result
 
-def render(cues, translations, slides, out, default_color=None, text_color=None, outline_color=None):
+def caption_events(cues, translations, spec, *, merge_short=False,
+                   short_threshold=1.0, minimum_duration=1.5,
+                   maximum_duration=7.0, maximum_gap=.45):
+    """Combine fleeting bilingual cues while preserving every original cue ID."""
+    source = slide_events(cues, spec)
+    events = [{"start":s, "end":e, "ids":[idx]} for s,e,idx in source]
+    if not merge_short:
+        return events
+    if not (0 < short_threshold <= minimum_duration <= maximum_duration):
+        raise ValueError("Invalid subtitle duration limits")
+
+    def spoken(group):
+        en = " ".join(cues[idx-1]["en"].strip() for idx in group["ids"])
+        cn = " ".join(translations[idx].strip() for idx in group["ids"])
+        return en, cn
+
+    def candidate(left, right):
+        gap = right["start"]-left["end"]
+        if gap < -.02 or gap > maximum_gap or right["end"]-left["start"] > maximum_duration:
+            return None
+        if any(cues[idx-1].get("speaker") != cues[left["ids"][0]-1].get("speaker")
+               for idx in right["ids"]):
+            return None
+        merged = {"start":left["start"], "end":right["end"],
+                  "ids":left["ids"]+right["ids"]}
+        en, cn = spoken(merged)
+        if len(en) > 150 or len(cn) > 66 or len(lines_for(en, cn)[1]) > 4:
+            return None
+        prev_en, _ = spoken(left)
+        next_en, _ = spoken(right)
+        topic_break = bool(re.search(r"[.!?][\"')\]]?$", prev_en)) and bool(re.match(r"[A-Z]", next_en))
+        return int(topic_break), gap, merged
+
+    i = 0
+    while i < len(events):
+        current = events[i]
+        if current["end"]-current["start"] >= short_threshold:
+            i += 1
+            continue
+        choices = []
+        if i > 0:
+            previous = candidate(events[i-1], current)
+            if previous is not None:
+                choices.append((previous[0], previous[1], 0, i-1, previous[2]))
+        if i+1 < len(events):
+            following = candidate(current, events[i+1])
+            if following is not None:
+                choices.append((following[0], following[1], 1, i, following[2]))
+        if choices:
+            _, _, _, pos, merged = min(choices)
+            events[pos:pos+2] = [merged]
+            i = max(0, pos-1)
+        else:
+            i += 1
+
+    if "end" in spec and "start" in spec:
+        end_of_slide = float(spec["end"])-float(spec.get("offset", spec["start"]))
+        for i, item in enumerate(events):
+            if item["end"]-item["start"] >= minimum_duration:
+                continue
+            next_start = events[i+1]["start"] if i+1 < len(events) else end_of_slide
+            item["end"] = min(next_start, item["start"]+minimum_duration)
+    if [idx for event in events for idx in event["ids"]] != [idx for _,_,idx in source]:
+        raise ValueError("Caption merge dropped or reordered source cues")
+    return events
+
+
+def render(cues, translations, slides, out, default_color=None, text_color=None, outline_color=None,
+           *, merge_short=False, short_threshold=1.0, minimum_duration=1.5):
     check_cues(cues)
     cn = require_translation(cues, translations)
     out = Path(out)
@@ -97,9 +165,14 @@ def render(cues, translations, slides, out, default_color=None, text_color=None,
             style, "", "[Events]",
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
         ]
-        events = slide_events(cues, spec)
-        for start, end, idx in events:
-            size, lines = lines_for(cues[idx-1]["en"], cn[idx])
+        events = caption_events(cues, cn, spec, merge_short=merge_short,
+                                short_threshold=short_threshold,
+                                minimum_duration=minimum_duration)
+        for event in events:
+            start, end, ids = event["start"], event["end"], event["ids"]
+            en = " ".join(cues[idx-1]["en"].strip() for idx in ids)
+            chinese = " ".join(cn[idx] for idx in ids)
+            size, lines = lines_for(en, chinese)
             # Literal ASS line breaks are inserted by us after escaping user input.
             content = r"\N".join(lines)
             if size != 32:
@@ -107,7 +180,10 @@ def render(cues, translations, slides, out, default_color=None, text_color=None,
             output.append(f"Dialogue: 0,{timestamp(start)},{timestamp(end)},Default,,0,0,0,,{content}")
         target = out / f"slide{int(key):02d}.ass"
         target.write_text("\n".join(output)+"\n", encoding="utf-8")
-        results.append({"slide":int(key), "file":str(target), "events":len(events), **colors})
+        original = slide_events(cues, spec)
+        results.append({"slide":int(key), "file":str(target), "events":len(events),
+                        "source_cues":len(original),
+                        "merged_cues":len(original)-len(events), **colors})
     return results
 
 def main():

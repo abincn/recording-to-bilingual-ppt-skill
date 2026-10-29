@@ -25,6 +25,7 @@ from make_ass import render as render_ass
 from make_videos import duration as media_duration, render_one
 from build_ppt import build
 from courseware_plan import body_lines, render_image, specs_from_plan, validate_plan
+from timing_optimize import optimize_audio
 
 def external(command):
     result = subprocess.run(command, capture_output=True, text=True)
@@ -177,10 +178,19 @@ def slide_image(path, title, bullets, color):
 def split_audio(master, begin, finish, destination, overwrite):
     if finish <= begin:
         raise ValueError("Empty slide audio interval")
-    external(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y" if overwrite else "-n",
-              "-ss", f"{begin:.3f}", "-t", f"{finish-begin:.3f}",
-              "-i", str(master), "-vn", "-ac", "1", "-codec:a", "libmp3lame",
-              "-b:a", "64k", str(destination)])
+    for attempt in range(2):
+        external(["ffmpeg", "-hide_banner", "-loglevel", "error",
+                  "-y" if overwrite or attempt else "-n",
+                  "-ss", f"{begin:.3f}", "-t", f"{finish-begin:.3f}",
+                  "-i", str(master), "-vn", "-ac", "1", "-codec:a", "libmp3lame",
+                  "-b:a", "64k", str(destination)])
+        try:
+            if destination.stat().st_size > 1024 and abs(
+                    media_duration(destination)-(finish-begin)) < .35:
+                return
+        except (OSError, RuntimeError, ValueError):
+            pass
+    raise RuntimeError(f"Audio clip is incomplete or unreadable: {destination}")
 
 def sample_frame(video, ass, output):
     """Extract the first cue and each long cue for visible-caption QA."""
@@ -217,6 +227,15 @@ def main():
     ap.add_argument("--colors", default="F6FBF3", help="Comma-separated slide background hex colours")
     ap.add_argument("--autoplay", action="store_true")
     ap.add_argument("--stage", choices=("all", "transcribe"), default="all")
+    ap.add_argument("--no-silence-compression", action="store_true",
+                    help="Do not shorten long confirmed non-speech pauses")
+    ap.add_argument("--min-silence", type=float, default=2.5)
+    ap.add_argument("--target-pause", type=float, default=.8)
+    ap.add_argument("--silence-db", type=int, default=-14,
+                    help="Threshold after loudness normalization (default -14 dB)")
+    ap.add_argument("--no-caption-merge", action="store_true")
+    ap.add_argument("--short-caption", type=float, default=1.0)
+    ap.add_argument("--min-caption", type=float, default=1.5)
     ap.add_argument("--resume", action="store_true", help="Reuse an existing enhanced master and transcript")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
@@ -254,21 +273,37 @@ def main():
                         model=args.ollama_model, url=args.ollama_url)
     write_json(project/"sentence_cn.json", {str(k):v for k,v in chinese.items()})
     curated = validate_plan(read_json(args.courseware_plan), cues, whole) if args.courseware_plan else None
-    if curated:
-        specs = specs_from_plan(curated, cues, whole)
+    audio_master = project/"optimized_master.wav"
+    if args.no_silence_compression:
+        shutil.copyfile(master, audio_master)
+        aligned_cues, aligned_whole = cues, whole
+        audio_report = {"enabled":False, "original_seconds":round(whole,3),
+                        "optimized_seconds":round(whole,3), "saved_seconds":0,
+                        "cuts":0, "preserved_cues":len(cues)}
     else:
-        specs = partition_cues(cues, whole, min(args.slides, len(cues)))
+        aligned_cues, aligned_whole, audio_report = optimize_audio(
+            master, audio_master, cues, minimum=args.min_silence,
+            target_pause=args.target_pause, noise_db=args.silence_db)
+    write_json(project/"optimized_cues.json", aligned_cues)
+    write_json(project/"silence-report.json", audio_report)
+    if curated:
+        specs = specs_from_plan(curated, aligned_cues, aligned_whole)
+    else:
+        specs = partition_cues(aligned_cues, aligned_whole, min(args.slides, len(cues)))
         print("WARNING: No --courseware-plan; output is an extractive DRAFT, not finished courseware.",
               file=sys.stderr)
         if args.slides > len(cues):
             print(f"Requested {args.slides} slides but only {len(cues)} sentences; reducing slide count")
     manifest = {"slide_width_in":13.333, "slide_height_in":7.5,
                 "subtitle_fraction":1.805/7.5, "mode":args.mode,
-                "autoplay":args.autoplay, "draft":not bool(curated), "slides":[]}
+                "autoplay":args.autoplay, "draft":not bool(curated),
+                "caption_merge":not args.no_caption_merge,
+                "short_caption":args.short_caption, "min_caption":args.min_caption,
+                "slides":[]}
     spec_map = {}
     for i, spec in enumerate(specs, 1):
         number = f"{i:02d}"
-        outline = curated[i-1] if curated else simple_outline(cues, spec, i)
+        outline = curated[i-1] if curated else simple_outline(aligned_cues, spec, i)
         color = hex_color(outline.get("bar_color", colors[(i-1)%len(colors)]))
         spec["bar_color"] = color
         spec_map[str(i)] = spec
@@ -277,7 +312,7 @@ def main():
         video = videos/f"slide{number}.mp4"
         pic = slides_dir/f"slide{number}.png"
         post = videos/f"poster{number}.png"
-        split_audio(master, spec["start"], spec["end"], audio, args.force or args.resume)
+        split_audio(audio_master, spec["start"], spec["end"], audio, args.force or args.resume)
         if args.mode == "image":
             if curated:
                 render_image(pic, outline, color, font_path())
@@ -300,10 +335,19 @@ def main():
             "video":str(video.relative_to(project)),
             "poster":str(post.relative_to(project)), "bar_color":color,
             "notes":(outline.get("notes", "") + "\n" if curated else "") +
-                     f"Recording {spec['start']:.2f}–{spec['end']:.2f}s. Original voice, cleaned; sentence-level bilingual ASS, middle-centred.",
+                     f"Optimized recording {spec['start']:.2f}–{spec['end']:.2f}s. "
+                     "Original voice, cleaned; long verified pauses may be shortened. "
+                     "Bilingual captions retain source cue IDs.",
         })
     write_json(project/"slides.json", spec_map)
-    styles = render_ass(cues, {str(k):v for k,v in chinese.items()}, spec_map, videos)
+    styles = render_ass(aligned_cues, {str(k):v for k,v in chinese.items()}, spec_map, videos,
+                        merge_short=not args.no_caption_merge,
+                        short_threshold=args.short_caption,
+                        minimum_duration=args.min_caption)
+    write_json(project/"subtitle-report.json", {
+        "enabled":not args.no_caption_merge, "source_cues":len(cues),
+        "display_events":sum(s["events"] for s in styles),
+        "merged_cues":sum(s["merged_cues"] for s in styles), "per_slide":styles})
     for item in manifest["slides"]:
         render_one(project/item["audio"], project/item["ass"], item["bar_color"],
                    project/item["video"], overwrite=args.force or args.resume)
@@ -315,7 +359,10 @@ def main():
     build(file, ppt, overwrite=args.force or args.resume)
     from validate import validate
     validate(file, ppt)
-    print(f"Done: {ppt}\nQA frames: {qa}\nColours: {json.dumps(styles, ensure_ascii=False)}")
+    print(f"Done: {ppt}\nQA frames: {qa}\n"
+          f"Silence saved: {audio_report['saved_seconds']:.2f}s; "
+          f"captions merged: {sum(s['merged_cues'] for s in styles)}\n"
+          f"Colours: {json.dumps(styles, ensure_ascii=False)}")
 
 if __name__ == "__main__":
     main()

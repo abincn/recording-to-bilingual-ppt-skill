@@ -60,6 +60,21 @@ All narrated slides have the original speaker's cleaned audio embedded in a
 video subtitle strip. Captions are English over Chinese and remain outside
 the content area.
 
+### Default quiet-audio and short-caption optimization
+
+- Compress only detected non-speech silence lasting at least **2.5 s** to around
+  **0.8 s**, protecting all transcript cue intervals. The FFmpeg quiet threshold
+  after loudness normalization defaults to **-14 dB**.
+- Merge captions shorter than **1 s** with adjacent captions on the same slide
+  if bilingual text fits. Otherwise, extend their display into available gaps
+  toward **1.5 s**. Never drop English or Chinese transcript text.
+- Preserve `enhanced_master.wav` and `merged_cues.json`. Emit
+  `optimized_master.wav`, `optimized_cues.json`, `silence-report.json` and
+  `subtitle-report.json`; every slide clip uses the new synchronized clock.
+- Disable with `--no-silence-compression` and/or `--no-caption-merge`;
+  tune using `--min-silence`, `--target-pause`, `--silence-db`,
+  `--short-caption` and `--min-caption`.
+
 ## Draft or explicit Ollama option
 
 A preliminary **draft** can omit `--courseware-plan` and use `--slides 8`
