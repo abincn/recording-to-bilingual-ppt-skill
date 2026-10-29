@@ -58,7 +58,9 @@ title and cue range; never copy subject-specific figures into another lecture.
 A `table` object contains 2–6 `columns`, 1–8 `rows`, and optional
 `footnote`. Rows are arrays of cells or
 `{"cells":["..."],"emphasis":true}` objects. All row lengths equal the
-number of columns. In editable mode these are **native PowerPoint tables**.
+number of columns. In default HTML, these are rasterized into the embedded
+chapter image; only the opt-in `--format pptx --mode editable` output uses
+**native PowerPoint tables**.
 
 ## Quality requirements
 

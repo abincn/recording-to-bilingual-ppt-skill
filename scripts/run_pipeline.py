@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end local lecture audio -> bilingual PPTX (image or editable text).
+"""End-to-end lecture audio -> single offline HTML or optional bilingual PPTX.
 
 Transcription stays local. Translation defaults to user/ChatGPT-supplied JSON;
 an explicitly selected Ollama endpoint is also supported. The program itself
@@ -23,9 +23,9 @@ from pipeline_core import (check_cues, contrast, cues_from_words, hex_color,
                            simple_outline, write_json)
 from make_ass import render as render_ass
 from make_videos import duration as media_duration, render_one
-from build_ppt import build
 from courseware_plan import body_lines, render_image, specs_from_plan, validate_plan
 from timing_optimize import optimize_audio
+from build_web import SKILL_VERSION, build as build_web
 
 def external(command):
     result = subprocess.run(command, capture_output=True, text=True)
@@ -212,6 +212,7 @@ def sample_frame(video, ass, output):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--version", action="version", version=SKILL_VERSION)
     ap.add_argument("--audio", required=True)
     ap.add_argument("--project", required=True, help="New project directory for persistent intermediate artifacts")
     ap.add_argument("--slides", type=int, default=10)
@@ -223,7 +224,10 @@ def main():
     ap.add_argument("--courseware-plan", help="Curated topic-aligned JSON plan; required for finished courseware")
     ap.add_argument("--ollama-model", default="qwen2.5:7b")
     ap.add_argument("--ollama-url", default="http://127.0.0.1:11434")
-    ap.add_argument("--mode", choices=("image", "editable"), default="image")
+    ap.add_argument("--format", choices=("html", "pptx"), default="html",
+                    help="Default: standalone offline interactive HTML; pptx is opt-in")
+    ap.add_argument("--mode", choices=("image", "editable"), default="image",
+                    help="PowerPoint-only slide mode; HTML always renders the curated slide images")
     ap.add_argument("--colors", default="F6FBF3", help="Comma-separated slide background hex colours")
     ap.add_argument("--autoplay", action="store_true")
     ap.add_argument("--stage", choices=("all", "transcribe"), default="all")
@@ -294,7 +298,9 @@ def main():
               file=sys.stderr)
         if args.slides > len(cues):
             print(f"Requested {args.slides} slides but only {len(cues)} sentences; reducing slide count")
-    manifest = {"slide_width_in":13.333, "slide_height_in":7.5,
+    manifest = {"skill_version":SKILL_VERSION, "format":args.format,
+                "title":source.stem,
+                "slide_width_in":13.333, "slide_height_in":7.5,
                 "subtitle_fraction":1.805/7.5, "mode":args.mode,
                 "autoplay":args.autoplay, "draft":not bool(curated),
                 "caption_merge":not args.no_caption_merge,
@@ -312,8 +318,9 @@ def main():
         video = videos/f"slide{number}.mp4"
         pic = slides_dir/f"slide{number}.png"
         post = videos/f"poster{number}.png"
-        split_audio(audio_master, spec["start"], spec["end"], audio, args.force or args.resume)
-        if args.mode == "image":
+        if args.format == "pptx":
+            split_audio(audio_master, spec["start"], spec["end"], audio, args.force or args.resume)
+        if args.format == "html" or args.mode == "image":
             if curated:
                 render_image(pic, outline, color, font_path())
             else:
@@ -322,23 +329,27 @@ def main():
             from PIL import Image
             with Image.open(pic) as image:
                 color = hex_color(image.getpixel((0, 0))[:3])
-        poster(post, color)
-        manifest["slides"].append({
+        if args.format == "pptx":
+            poster(post, color)
+        entry = {
             "picture":str(pic.relative_to(project)),
             "title":outline["title"],
             "layout":outline["layout"] if curated else "bullets",
             "bullets":body_lines(outline) if curated else outline["bullets"],
             "table":outline.get("table") if curated else None,
             "section":outline.get("section") if curated else None,
-            "audio":str(audio.relative_to(project)),
-            "ass":str(ass.relative_to(project)),
-            "video":str(video.relative_to(project)),
-            "poster":str(post.relative_to(project)), "bar_color":color,
+            "bar_color":color,
             "notes":(outline.get("notes", "") + "\n" if curated else "") +
                      f"Optimized recording {spec['start']:.2f}–{spec['end']:.2f}s. "
                      "Original voice, cleaned; long verified pauses may be shortened. "
                      "Bilingual captions retain source cue IDs.",
-        })
+        }
+        if args.format == "pptx":
+            entry.update({"audio":str(audio.relative_to(project)),
+                          "ass":str(ass.relative_to(project)),
+                          "video":str(video.relative_to(project)),
+                          "poster":str(post.relative_to(project))})
+        manifest["slides"].append(entry)
     write_json(project/"slides.json", spec_map)
     styles = render_ass(aligned_cues, {str(k):v for k,v in chinese.items()}, spec_map, videos,
                         merge_short=not args.no_caption_merge,
@@ -348,14 +359,21 @@ def main():
         "enabled":not args.no_caption_merge, "source_cues":len(cues),
         "display_events":sum(s["events"] for s in styles),
         "merged_cues":sum(s["merged_cues"] for s in styles), "per_slide":styles})
+    file = project/"manifest.json"
+    write_json(file, manifest)
+    if args.format == "html":
+        webpage = build_web(project, overwrite=args.force or args.resume)
+        print(f"Done: {webpage}\nStandalone and offline; open in Chrome or Edge.\n"
+              f"Skill v{SKILL_VERSION}. Silence saved: {audio_report['saved_seconds']:.2f}s; "
+              f"captions merged: {sum(s['merged_cues'] for s in styles)}")
+        return
     for item in manifest["slides"]:
         render_one(project/item["audio"], project/item["ass"], item["bar_color"],
                    project/item["video"], overwrite=args.force or args.resume)
         sample_frame(project/item["video"], project/item["ass"],
                      qa/(Path(item["video"]).stem+".png"))
-    file = project/"manifest.json"
-    write_json(file, manifest)
     ppt = project/f"courseware-{args.mode}.pptx"
+    from build_ppt import build
     build(file, ppt, overwrite=args.force or args.resume)
     from validate import validate
     validate(file, ppt)

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>交互式双语课件 · Offline Bilingual Lesson</title>
+  <style>
+    :root{font-family:Inter,"Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif;color:#e7f6f6;background:#071924;font-size:15px}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 4% -22%,#25545c,transparent 45%),#071924}
+    button,input,select{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #b1f3dc;outline-offset:3px}
+    .app{max-width:1700px;margin:auto;padding:22px 25px 42px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:22px;border-bottom:1px solid #ffffff26;margin-bottom:26px}
+    .brand{display:flex;align-items:center;gap:12px}.logo{width:48px;height:48px;flex-shrink:0;border-radius:15px;display:grid;place-items:center;background:#a8ebd8;color:#0d342c;font-size:20px;font-weight:850}
+    .eyebrow{letter-spacing:.18em;text-transform:uppercase;font-size:11px;font-weight:800;color:#90dbc9}.brand h1{margin:3px 0 0;font-size:21px;font-weight:720}
+    .chip{border:1px solid #375762;background:#1a3540;color:#bdd4d7;padding:7px 12px;border-radius:30px;font-size:12px}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.grid{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:24px;align-items:start}
+    .lesson{min-width:0}.topline{display:flex;align-items:end;justify-content:space-between;gap:14px;margin:0 2px 15px}.topline h2{font-size:clamp(20px,2vw,28px);margin:5px 0 0;line-height:1.3;font-weight:710}
+    .muted{font-size:12px;color:#98b4be}.screen{border-radius:17px;overflow:hidden;background:#e5f0ec;box-shadow:0 18px 60px #0009;position:relative}
+    .slide-img{width:100%;aspect-ratio:1600/684;display:block;object-fit:contain;background:#eff5f1}.captions{min-height:clamp(112px,12vw,168px);display:flex;align-items:center;justify-content:center;text-align:center;background:#173440;padding:16px 26px;border-top:1px solid #8cd1b644}
+    .captions-inner{width:100%;max-width:1000px}.en{font-size:clamp(15px,1.45vw,24px);line-height:1.4;color:#f7feff;font-weight:610}.cn{font-size:clamp(15px,1.6vw,25px);line-height:1.45;color:#b3f3df;font-weight:650;margin-top:6px}
+    .no-caption{color:#97bec5;font-size:14px}.overlay{position:absolute;top:0;left:0;right:0;height:calc(100% - 112px);display:grid;place-items:center;background:#12263148;transition:opacity .2s}.overlay.hide{opacity:0;pointer-events:none}
+    .play-circle{height:90px;width:90px;border-radius:50%;border:2px solid #ddfff7;background:#1a4a42d9;color:white;font-size:36px;box-shadow:0 8px 44px #0007}
+    .controls{margin-top:16px;background:#142936;border:1px solid #34515d;border-radius:17px;padding:19px 21px;box-shadow:0 12px 36px #0004}
+    .timeline{display:flex;align-items:center;gap:12px}.time{color:#bfdae0;font-size:13px;min-width:44px;white-space:nowrap;font-variant-numeric:tabular-nums}.time:last-child{text-align:right}
+    input[type=range]{width:100%;accent-color:#a7ecd8;cursor:pointer}.actions{margin-top:15px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+    .buttons,.options{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.btn{background:#254350;border:1px solid #44616a;color:#e7f6f7;border-radius:10px;padding:10px 13px;font-size:13px;font-weight:630}.btn:hover{background:#315361}
+    .btn.primary{background:#a7ecd8;color:#12382f;border-color:#a7ecd8;min-width:118px;font-weight:790;font-size:16px}.speed{display:flex;align-items:center;background:#0d2430;border:1px solid #44636c;border-radius:11px;padding:3px}
+    .speed button{background:transparent;color:#e5fcf2;border:0;min-width:34px;padding:7px 10px;font-size:20px;line-height:1}.speed button:hover{background:#254350;border-radius:7px}.speed strong{min-width:58px;text-align:center;color:#a8ebd8;font-size:17px;font-variant-numeric:tabular-nums}
+    .options .label{font-size:12px;color:#96aeb8}.options select{border:1px solid #436472;background:#102633;color:#e5f5f7;border-radius:10px;padding:9px;max-width:120px}
+    .underbar{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-top:13px;font-size:12px;color:#88a7b3}
+    aside{position:sticky;top:20px;border:1px solid #31505c;background:#102731;border-radius:17px;max-height:calc(100vh - 90px);display:flex;flex-direction:column;overflow:hidden}
+    .aside-head{padding:20px 18px;border-bottom:1px solid #35525c;display:flex;justify-content:space-between;align-items:center}.aside-head h3{font-size:17px;margin:0}.chapters{padding:8px;overflow:auto}
+    .chapter{display:grid;grid-template-columns:33px minmax(0,1fr);align-items:start;gap:10px;width:100%;text-align:left;padding:11px;border-radius:11px;color:#b8ced5;border:1px solid transparent;background:transparent}
+    .chapter:hover{background:#24434f}.chapter.active{background:#254c45;border-color:#679e8c;color:#eefff9}.chapter-no{width:31px;height:31px;border-radius:9px;border:1px solid #52747c;background:#1f3a46;display:grid;place-items:center;color:#b6d5d8;font-size:12px;font-weight:750}
+    .chapter.active .chapter-no{background:#abe9d4;color:#154135;border-color:#abe9d4}.chapter-title{font-size:13px;font-weight:680;line-height:1.35}.chapter-time{font-size:11px;color:#94aeba;margin-top:7px;font-variant-numeric:tabular-nums}
+    .stats{border-top:1px solid #35525c;padding:18px;color:#a0b9c1;font-size:12px}.stat{display:flex;justify-content:space-between;margin:5px 0}.stat strong{color:#a7ecd8}
+    footer{margin-top:22px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;color:#799da9;font-size:12px}
+    @media(max-width:1040px){.grid{grid-template-columns:1fr}aside{position:static;max-height:330px}.chapters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:650px){.app{padding:13px}.brand h1{font-size:15px}.chips{display:none}header{margin-bottom:17px}.topline h2{font-size:20px}.screen{border-radius:11px}.captions{padding:14px;min-height:138px}.controls{padding:15px 12px}.actions{align-items:flex-start}.chapters{grid-template-columns:1fr}.overlay{height:calc(100% - 138px)}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header><div class="brand"><div class="logo">AC</div><div><div class="eyebrow">Offline bilingual classroom</div><h1 id="courseTitle">交互式双语课件</h1></div></div><div class="chips"><span class="chip" id="chapterCount">课程章节</span><span class="chip">英语原声 · 中文字幕</span><span class="chip">0.1× 精细调速</span></div></header>
+  <main class="grid">
+    <section class="lesson">
+      <div class="topline"><div><div class="eyebrow" id="section">COURSE</div><h2 id="title">正在加载课程</h2></div><div class="muted">讲解进度与课件自动同步</div></div>
+      <div class="screen" id="screen"><img class="slide-img" id="slide" alt="当前课件页面"><div class="captions"><div class="captions-inner"><div class="en" id="en"></div><div class="cn" id="cn"></div><div class="no-caption" id="hint">点击播放，开始学习</div></div></div><div class="overlay" id="overlay"><button class="play-circle" id="bigPlay" aria-label="开始播放">▶</button></div></div>
+      <div class="controls">
+        <div class="timeline"><span class="time" id="now">00:00</span><input type="range" id="seek" min="0" max="100" step="0.1" value="0" aria-label="音频播放位置"><span class="time" id="total">00:00</span></div>
+        <div class="actions"><div class="buttons"><button class="btn primary" id="play">▶ 播放</button><button class="btn" id="back">↶ 10 秒</button><button class="btn" id="forward">10 秒 ↷</button></div>
+          <div class="options"><span class="label">速度</span><div class="speed"><button id="slower" aria-label="降低0.1倍速">−</button><strong id="speed">1.0×</strong><button id="faster" aria-label="增加0.1倍速">+</button></div><button class="btn" id="normal">1.0×</button><span class="label">字幕</span><select id="lang" aria-label="字幕语言"><option value="both">双语</option><option value="cn">中文</option><option value="en">英文</option><option value="off">关闭</option></select><button class="btn" id="full" aria-label="课程全屏">⛶</button></div>
+        </div>
+        <div class="underbar"><span>快捷键：空格播放/暂停，←→ 跳转10秒，↑↓ 调整0.1×</span><span id="message">0.5×–2.0× · 变速保留原声音调</span></div>
+      </div>
+      <audio id="audio" preload="metadata" src="__AUDIO_SOURCE__"></audio>
+      <footer><span>本课件包含原声、双语字幕和所有课件图片 · 无需联网</span><span id="version"></span></footer>
+    </section>
+    <aside><div class="aside-head"><h3>课程目录</h3><span class="muted" id="chapterCounter"></span></div><div class="chapters" id="chapterList"></div><div class="stats"><div class="stat"><span>原录音</span><strong id="original"></strong></div><div class="stat"><span>优化后时长</span><strong id="short"></strong></div><div class="stat"><span>短字幕合并</span><strong id="merged"></strong></div></div></aside>
+  </main>
+</div>
+<script id="course-data" type="application/json">__COURSE_JSON__</script>
+<script>
+(() => {
+  'use strict';
+  const COURSE = JSON.parse(document.getElementById('course-data').textContent);
+  const $ = id => document.getElementById(id), audio=$('audio'), slider=$('seek');
+  const slides=COURSE.slides, captions=COURSE.captions, duration=COURSE.duration;
+  let active=-1, mode='both', tenths=10, scrubbing=false;
+  const fmt = t => {t=Math.max(0,Math.floor(t||0));return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0')};
+  const find = (items,t) => {let left=0,right=items.length-1,index=-1;while(left<=right){const mid=(left+right)>>1;if(items[mid].start<=t){index=mid;left=mid+1}else right=mid-1}return index};
+  $('courseTitle').textContent=COURSE.title+(COURSE.draft?' · DRAFT':'');
+  $('chapterCount').textContent=slides.length+' 个知识章节';
+  $('original').textContent=fmt(COURSE.originalDuration);
+  $('short').textContent=fmt(duration);
+  $('merged').textContent=COURSE.mergedCount+' 条';
+  $('version').textContent='Skill v'+COURSE.version;
+  $('total').textContent=fmt(duration);
+  slider.max=String(duration);
+  slides.forEach((chapter,i)=>{
+    const button=document.createElement('button');button.type='button';button.className='chapter';button.dataset.idx=i;
+    const number=document.createElement('span');number.className='chapter-no';number.textContent=String(i+1).padStart(2,'0');
+    const body=document.createElement('span');
+    const title=document.createElement('div');title.className='chapter-title';title.textContent=chapter.title;
+    const time=document.createElement('div');time.className='chapter-time';time.textContent=fmt(chapter.start)+' · '+fmt(chapter.end-chapter.start)+' 时长';
+    body.append(title,time);button.append(number,body);button.onclick=()=>{audio.currentTime=chapter.start;sync()};$('chapterList').append(button);
+  });
+  function speed(n){tenths=Math.max(5,Math.min(20,Math.round(n)));audio.playbackRate=tenths/10;audio.preservesPitch=true;$('speed').textContent=(tenths/10).toFixed(1)+'×';$('slower').disabled=tenths===5;$('faster').disabled=tenths===20}
+  $('slower').onclick=()=>speed(tenths-1);$('faster').onclick=()=>speed(tenths+1);$('normal').onclick=()=>speed(10);speed(10);
+  function toggle(){if(audio.paused)audio.play().catch(()=>{$('message').textContent='浏览器未允许播放，请再次点击'});else audio.pause()}
+  $('play').onclick=toggle;$('bigPlay').onclick=toggle;
+  $('back').onclick=()=>{audio.currentTime=Math.max(0,audio.currentTime-10);sync()};$('forward').onclick=()=>{audio.currentTime=Math.min(duration,audio.currentTime+10);sync()};
+  slider.onpointerdown=()=>scrubbing=true;slider.onpointerup=()=>scrubbing=false;slider.onchange=()=>scrubbing=false;
+  slider.oninput=()=>{audio.currentTime=Number(slider.value);sync()};
+  $('lang').onchange=event=>{mode=event.target.value;sync()};
+  $('full').onclick=()=>{if(!document.fullscreenElement)$('screen').requestFullscreen?.();else document.exitFullscreen?.()};
+  function sync(){
+    const t=Math.max(0,audio.currentTime||0);if(!scrubbing)slider.value=String(Math.min(duration,t));$('now').textContent=fmt(t);
+    const i=Math.max(0,Math.min(slides.length-1,find(slides,t)));
+    if(i!==active){active=i;const section=slides[i];$('title').textContent=section.title;$('section').textContent=section.section.toUpperCase()+' · 第'+String(i+1).padStart(2,'0')+'页';$('slide').src=section.image;$('slide').alt=section.title;$('chapterCounter').textContent=String(i+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');document.querySelectorAll('.chapter').forEach((el,j)=>el.classList.toggle('active',j===i))}
+    const j=find(captions,t),cap=j>=0&&t<=captions[j].end+.005?captions[j]:null;
+    $('en').textContent=cap?cap.en:'';$('cn').textContent=cap?cap.cn:'';
+    $('en').hidden=mode==='cn'||mode==='off';$('cn').hidden=mode==='en'||mode==='off';
+    $('hint').hidden=!!cap||mode==='off';$('hint').textContent=audio.paused?'点击播放，开始学习':'原声播放中…';
+    $('play').textContent=audio.paused?'▶ 播放':'Ⅱ 暂停';$('overlay').classList.toggle('hide',!audio.paused);
+  }
+  audio.onplay=sync;audio.onpause=sync;audio.onseeked=sync;audio.onended=sync;
+  audio.onloadedmetadata=()=>{if(Math.abs(audio.duration-duration)>1)$('message').textContent='媒体时长和字幕时长不一致，请重新生成课件';sync()};
+  document.addEventListener('keydown',event=>{if(['BUTTON','INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;let handled=true;switch(event.key){case ' ':toggle();break;case 'ArrowLeft':audio.currentTime=Math.max(0,audio.currentTime-10);break;case 'ArrowRight':audio.currentTime=Math.min(duration,audio.currentTime+10);break;case 'ArrowUp':speed(tenths+1);break;case 'ArrowDown':speed(tenths-1);break;default:handled=false}if(handled){event.preventDefault();sync()}});
+  function frame(){if(!audio.paused)sync();requestAnimationFrame(frame)}sync();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

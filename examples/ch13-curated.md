@@ -54,7 +54,7 @@ Issued face 450,000, discount 30,000 → cash received 420,000. Redeemed face
 150,000, related discount 12,000 → cash paid 138,000. Net = +282,000.
 Discount amortisation is a non-cash add-back in Operating.
 
-## Deck order (reference)
+## Courseware chapter order (reference)
 
 For this particular lecture: cover/overview, operating cash-flow rules,
 13-3, 13-4, 13-5, land, bonds and a closing review. This order is not a

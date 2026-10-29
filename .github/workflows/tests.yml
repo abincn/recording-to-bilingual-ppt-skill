@@ -1,4 +1,4 @@
-name: Test bilingual PPT skill
+name: Test bilingual courseware skill
 on:
   push:
   pull_request:

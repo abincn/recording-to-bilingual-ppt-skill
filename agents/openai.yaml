@@ -1,4 +1,4 @@
 interface:
-  display_name: "Recording to Bilingual PPT"
-  short_description: "Turn lecture audio into original-voice Chinese-English PPT"
-  default_prompt: "Turn my lecture recording into a bilingual PowerPoint with the speaker's original voice and synchronized Chinese-English subtitles."
+  display_name: "Recording to Bilingual Courseware"
+  short_description: "Turn recordings into offline bilingual HTML lessons"
+  default_prompt: "Convert my lecture recording into a single-file offline interactive HTML lesson with the lecturer's original voice, synchronized Chinese-English subtitles, chapters and 0.1x speed controls."

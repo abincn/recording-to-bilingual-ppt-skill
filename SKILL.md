@@ -1,135 +1,157 @@
 ---
 name: recording-to-bilingual-ppt
-description: Turn lecture, training, meeting or classroom recordings from any subject into content-specific Chinese-English PowerPoint courseware with the original cleaned speaker audio and synchronized bilingual subtitles. Use for lecture transcription, translation, topic-aligned slide planning, examples, diagrams, tables, steps, formulas, and editable or image-based PPT delivery.
+description: Convert lectures, meetings, classes, training, workshops or interviews into subject-adaptive, offline single-file HTML courseware with the original cleaned audio, synchronized English-Chinese subtitles, interactive topic navigation and 0.1x playback speed controls. Use for recording transcription, automatic Chinese translation without mandatory human proofreading, content-specific slide planning, long-silence compression, short-caption merging, and optional legacy PowerPoint export.
 ---
 
-# Recording → bilingual PPT
+# Recording → interactive bilingual courseware
 
-Build a **different lesson from each recording**. Never import example content, numbers,
-slides or discipline-specific assumptions into a new job. Read `README.md` for setup
-and `references/plan-schema.md` when authoring a finished courseware plan.
+**Current release: v2.0.0.** `VERSION` is authoritative; `--version`, the
+generated `manifest.json` and the HTML footer read it automatically.
 
-## Non-negotiable rules
+Create a **different lesson from each recording**. The default deliverable is
+**one standalone `courseware-interactive.html`**: all images, the original-voice
+MP3 and bilingual subtitles embedded, with no CDN, external scripts, downloads
+or network requirement. Users can download it and double-click to open in
+Chrome or Edge. Do not upload the recording or publish the page online unless
+explicitly asked. PowerPoint remains available only with `--format pptx`.
 
-- Preserve the lecturer's **original voice**; reduce noise and normalize volume without
-  inventing speech or replacing it with synthetic narration. Shorten only FFmpeg-confirmed
-  long silence outside original cue ranges, preserving a natural pause.
-- Transcribe with time-stamped words, form coherent sentence cues and translate each cue
-  with the same 1-based ID. Preserve numbers, formulas, names and technical terms.
-  Chinese translation is automatic **without mandatory human proofreading**.
-- **Do not start a local translation model by default.** If the user declines local
-  translation, use ChatGPT to produce `sentence_cn.json` and pass `--translations`.
-  Ollama is optional, only when explicitly selected with `--translator ollama`.
-  Transcription via local Whisper is separate from translation.
-- A finished deck **requires content-specific planning** from the actual recording.
-  No fixed subject, 10-slide quota, chapter sequence, accounting tables or default
-  visual type. The bundled extractive auto-outline is **draft-only** and must be
-  called a draft, never a finished curated lesson.
-- Each slide covers complete, consecutive transcript cue IDs. Do not split or omit
-  taught content, alter speaker chronology, repeat audio, or break alignment to
-  meet a target slide count. Optional filler reduction must not remove meaning.
-  Never drop a transcript cue just to reduce subtitle flicker.
-- Use only values and claims supported by the recording or clearly marked external
-  material. Do not silently change uncertain ASR figures. When arithmetic exists,
-  check it; a derived figure needs a derivation note and a source-verification flag.
-  Non-numeric lessons do not need artificial calculations or data tables.
-- Keep all slide text above the reserved subtitle strip. Preserve the actual 1920×260
-  colored subtitle background with English first, Chinese second, alignment 5,
-  legible CJK fonts, >=4.5:1 contrast, and QA frames for actual renders. Combine
-  fleeting captions only when the bilingual text remains readable and stays within a slide.
-- The final PPT must have one correctly timed original-audio video strip per
-  narrated slide. Image mode is not text-editable; editable mode uses native
-  PowerPoint shapes and native tables for table slides.
-- State any ASR ambiguity, correction, unmatched number, source limitation,
-  slide mode, and playback caveat in delivery. Never claim manual verification
-  unless it actually occurred.
+Read `README.md` for setup and `references/plan-schema.md` when preparing a
+finished courseware plan.
 
-## Content-adaptive planning (default for finished courseware)
+## Rules that always apply
 
-1. **Understand the recording first.** Determine subject, audience, learning goal,
-   main topics, definitions, worked examples, demonstrations and question segments.
-   Identify where topics start and stop by cue ID, not equal clock intervals.
-2. **Select structures that fit the information.** Examples—not required sections:
-   - Concepts/explanations → concise bilingual bullet cards.
-   - Procedures or lab/workshop demonstrations → numbered steps.
-   - Comparisons, categories or experimental data → comparison/native table.
-   - Equations → formula with interpretation and units.
-   - Literature, history, interviews and speeches → quotation plus context.
-   - Numerical exercises → worked examples and calculation checks.
-   - Storytelling or case studies → chronological sections; tables only if useful.
-   Choose a suitable mix, and omit irrelevant types. Add maps, plots or diagrams
-   only when they clarify the actual material and are source-grounded.
-3. **Create a source-anchored plan** using `references/plan-schema.md`. The
-   `--courseware-plan` JSON explicitly assigns each slide's cue range, title,
-   layout and content. Plan count is determined by natural topics; `--slides`
-   applies only to draft fallback.
-4. **Cross-check every slide against its cue range**, including translated key
-   terms, numbers and the ordering of examples. If an assertion is inferred,
-   label the inference in notes or footnotes. A unique example never becomes
-   a universal rule for other recordings.
-5. **Build and inspect** image or editable output. Tables are native editable
-   PowerPoint tables when `--mode editable`; other layouts stay text-editable.
+- **Keep the lecturer's real voice.** Clean noise and normalize loudness;
+  never substitute generated speech. Shorten only verified non-speech silence
+  outside all spoken cue ranges, preserving a natural pause and remapping time.
+- Transcribe to time-stamped English sentences; translate every cue with its
+  exact 1-based ID. Preserve numbers, formulas, names and technical terms.
+  Chinese translation runs automatically by ChatGPT **without mandatory human
+  proofreading**. Flag doubtful ASR content instead of pretending it was checked.
+- **Do not start a local translation model by default.** Create
+  `sentence_cn.json` with ChatGPT and pass `--translations`; use Ollama only
+  if the user explicitly chooses `--translator ollama`. Local Whisper ASR
+  and local translation are separate decisions.
+- A **finished** courseware requires a plan derived from the actual lecture,
+  never a fixed slide count, fixed subject or reusable topic content. The
+  extractive `--slides N` fallback is **DRAFT** only.
+- Cover each transcript cue exactly once across ordered chapters. Preserve
+  content, speaker chronology, complete examples and audio synchronization.
+  Never delete speech to shorten the course or discard words to hide subtitles.
+- Use source-supported facts. Identify uncertain ASR figures and inferred
+  values. Check arithmetic only for lessons containing calculations. Do not
+  invent tables, diagrams or formulas for material that does not need them.
+- Merge fleeting captions only across adjacent cues in the **same chapter**
+  when the full bilingual text is readable; otherwise extend display into
+  available gaps. Preserve the original English and Chinese strings.
+- In default HTML, keep subtitles in a separate area beneath the slide image.
+  Provide interactive play/pause, seeking, chapters, ±10 s, CN/EN/bilingual/off
+  subtitles, fullscreen and **0.5×–2.0× speed in 0.1× steps**, preserving pitch.
+  The complete package must work without internet or extracted sidecar files.
+- Preserve source audio, transcripts, plan, timing reports and artifacts in
+  the working project; only the final HTML needs to be shared. Avoid uploading
+  classroom content to a public website without permission.
 
-The skill's general layouts are `bullets`, `steps`, `table`, `comparison`,
-`formula`, and `quote`. A special diagram or illustration may be supplied
-as a designed slide image when suitable; ensure its text and evidence remain
-readable. Never force a lecture into a layout merely because it is available.
+## Content-adaptive planning
 
-## Workflow
+1. Listen/read the transcript and identify **this lesson's** subject,
+   audience, learning goals, topic boundaries, examples and questions.
+2. Choose whichever layouts actually help: `bullets`, `steps`, `table`,
+   `comparison`, `formula`, `quote`; diagrams and images only if grounded in
+   the lesson. Accounting tables, laboratory procedures, historical timelines
+   and language-study quotations are **examples**, never default sections.
+3. Create `courseware-plan.json` as described in `references/plan-schema.md`.
+   Map each slide to consecutive original cue IDs, not equal clock intervals.
+   Chapter counts and layouts should follow natural topical changes.
+4. Verify slide contents against the exact cue ranges. Preserve technical
+   names, units, quotations and calculations; disclose any inference.
+5. Generate visually legible slides. Tables and formulas should be clear on
+   a phone and desktop; no text may overflow or collide with the subtitle area.
 
-1. Check Python dependencies, FFmpeg/libass/libx264/libmp3lame, ffprobe,
-   and Chinese fonts; use the user's preferred ASR/translation environment.
-2. Produce the original cleaned audio and timestamped English cues:
+## Recommended workflow
+
+1. Check Python, FFmpeg/ffprobe (`libmp3lame`; `libass`/`libx264` only for
+   optional PPTX), Noto Sans CJK fonts and the preferred ASR environment.
+2. Transcribe and clean the real lecture:
 
    ```bash
-   python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output --stage transcribe
+   python3 scripts/run_pipeline.py --audio lecture.m4a \
+     --project ./lecture-output --stage transcribe
    ```
 
-3. Use ChatGPT (or the explicitly chosen translation source) to create
-   `lecture-output/sentence_cn.json` with all `"1"`, `"2"`, ... cue keys,
-   and independently curate `lecture-output/courseware-plan.json` from
-   the **actual** recording. See `references/plan-schema.md`.
-4. Generate finished image or editable courseware:
+3. Using ChatGPT, translate each cue into Simplified Chinese in
+   `lecture-output/sentence_cn.json` using keys `"1"`, `"2"`, ... and
+   curate `lecture-output/courseware-plan.json` based on **this recording**.
+   Chinese editing/confirmation is optional, not a blocking step.
+4. Generate the **default single-file HTML**:
 
    ```bash
-   python3 scripts/run_pipeline.py --audio lecture.m4a --project ./lecture-output \
-     --resume --translations ./lecture-output/sentence_cn.json \
-     --courseware-plan ./lecture-output/courseware-plan.json --mode editable --autoplay
+   python3 scripts/run_pipeline.py --audio lecture.m4a \
+     --project ./lecture-output --resume \
+     --translations ./lecture-output/sentence_cn.json \
+     --courseware-plan ./lecture-output/courseware-plan.json
    ```
 
-   For a preliminary extractive draft only, omit `--courseware-plan`
-   and choose `--slides N`; label the result **DRAFT**. Do not deliver it
-   as curated courseware.
-   **Default timing refinements:** After transcription and translation, compress
-   FFmpeg-confirmed non-speech quiet intervals lasting at least 2.5 seconds to
-   roughly 0.8 seconds (threshold -14 dB on normalized audio), preserving
-   speech samples and remapping the full timeline. Then merge subtitles shorter
-   than 1 second with adjacent same-slide cues if text fits, or extend into
-   unused caption time aiming for 1.5 seconds. Keep original cue IDs and both
-   languages intact. Use `--no-silence-compression` or `--no-caption-merge`
-   to disable. Thresholds: `--min-silence`, `--target-pause`, `--silence-db`,
-   `--short-caption`, and `--min-caption`.
-5. If the user explicitly prefers Ollama, pass `--translator ollama`
-   in place of `--translations`. No other network translation is automatic.
-6. Run `scripts/validate.py`, check `qa/` screenshots and inspect the
-   slides in the target presentation app. Use
-   `python3 -B -m unittest discover -s tests -v` after code changes.
+   The finished result is `lecture-output/courseware-interactive.html`.
+   If you need to repackage a finished project without retranscribing, use
+   `python3 scripts/build_web.py --project ./lecture-output --force`.
 
-## Output contract
+5. Keep default timing refinements on: silence of at least **2.5 s** is
+   reduced to roughly **0.8 s** only when outside all cue ranges (threshold
+   **−14 dB**, normalized master); captions shorter than **1 s** merge with
+   short same-chapter neighbours if legible or are extended toward **1.5 s**.
+   Use `--no-silence-compression` or `--no-caption-merge` to disable. Tune with
+   `--min-silence`, `--target-pause`, `--silence-db`, `--short-caption`,
+   `--min-caption` where necessary. Keep source IDs and both languages intact.
+6. Validate the generated HTML by opening it **locally** (prefer `file://`
+   in Chrome/Edge); test audio play, seek, next chapter, subtitle visibility,
+   speed at 1.1× and 0.5× and offline loading. Check captions against audio
+   and ensure all chapter images load, no missing external assets and no
+   browser console errors. Run `python3 -B -m unittest discover -s tests -v`
+   after changes to scripts.
 
-- `merged_cues.json`: original sentence-level `{start,end,en}` transcript.
-- `optimized_master.wav`, `optimized_cues.json`: compressed media and remapped timeline.
-- `silence-report.json`, `subtitle-report.json`: audio savings and merged-caption counts.
-- `sentence_cn.json`: exact 1-based Chinese translations.
-- `courseware-plan.json`: selected topic ranges and visual layouts.
-- `slides.json`: actual sentence-timed audio/video ranges (not equal slices).
-- `manifest.json`: PPT shape content, subtitle videos, timing and notes.
-- `enhanced_master.wav`, `subtitle_videos/`, `slide_images/`, `qa/`,
-  and final `courseware-image.pptx` or `courseware-editable.pptx`.
+### Optional legacy PowerPoint
 
-The example in `examples/ch13-curated.md` is **only** an accounting example.
-Its numbers and layout choices must never be loaded into another lecture.
+Use only when the user explicitly requests a `.pptx`:
 
-In delivery, summarize the actual lecture, slide structure and languages,
-identify editable/image mode, disclose ambiguities and source corrections,
-and mention that embedded video autoplay depends on PowerPoint compatibility.
+```bash
+python3 scripts/run_pipeline.py --audio lecture.m4a \
+  --project ./lecture-output --resume \
+  --translations ./lecture-output/sentence_cn.json \
+  --courseware-plan ./lecture-output/courseware-plan.json \
+  --format pptx --mode editable --autoplay
+```
+
+`--mode image` uses fixed slide images; `--mode editable` generates native
+PowerPoint text and tables. PPTX contains per-slide original-voice video
+subtitle strips, which may auto-play differently across PowerPoint versions.
+Validate with `scripts/validate.py` and inspect sample QA frames. Do **not**
+apply PPTX-only strip requirements to the HTML layout.
+
+## Output and version contract
+
+- `VERSION`: one-line SemVer, initially `2.0.0`. Update it on every release;
+  increase the major component for incompatible deliverable/API changes.
+- `python3 scripts/run_pipeline.py --version` and
+  `python3 scripts/build_web.py --version` print the exact `VERSION`.
+- `manifest.json` contains `skill_version` and `format` (`html` or `pptx`);
+  the HTML footer displays the same version for update identification.
+- `merged_cues.json` and `enhanced_master.wav`: source-aligned transcript and
+  cleaned original voice.
+- `optimized_master.wav`, `optimized_cues.json`, `silence-report.json`:
+  compressed media, remapped time and savings; never lose original artifacts.
+- `sentence_cn.json`: Chinese text with matching 1-based IDs.
+- `courseware-plan.json`: actual content-based chapter plans and slide layouts.
+- `slides.json`, `subtitle-report.json`, `slide_images/` and `manifest.json`:
+  synchronized chapter boundaries, subtitle optimization and images.
+- Default final: `courseware-interactive.html`, a single offline HTML containing
+  its own MP3, slide images and full bilingual caption timeline. No other file
+  needs to accompany it.
+- Optional PPTX: `courseware-image.pptx` or `courseware-editable.pptx`, with
+  `subtitle_videos/` and `qa/` intermediates.
+
+Example lesson `examples/ch13-curated.md` is **accounting-specific only**.
+Do not reuse its figures, count or teaching order for another subject.
+
+In delivery, give the single HTML download, explain offline double-click
+opening, summarize actual topics and duration saved, and disclose ASR
+uncertainty or unverified figures. Never claim manual checking unless done.
